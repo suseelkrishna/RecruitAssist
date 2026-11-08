@@ -211,7 +211,7 @@ def test_owner_filter_and_reassigned_recruiter(use_db):
     use_db(data)
     assert found(tasks.pending_tasks(admin(), owner_user_id="USR-3")) == ["RULE-STAGE-7D"]
     assert found(tasks.pending_tasks(admin(), owner_user_id="USR-1"), "task_id") == ["TASK-1"]
-    store.record_reassignment("JOB-1", "USR-2", "USR-1", "2026-11-09T00:00:00Z")
+    store.set_assignment("JOB-1", "USR-2", "USR-1")
     assert found(tasks.pending_tasks(admin(), owner_user_id="USR-2")) == ["RULE-STAGE-7D"]
 
 

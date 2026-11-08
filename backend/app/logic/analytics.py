@@ -267,3 +267,21 @@ def offer_acceptance(principal: Principal, **filters: Any) -> dict[str, Any]:
     return {"metric": "offer_acceptance", "as_of": as_of, "offers": len(offers),
             "accepted": accepted, "declined": declined, "withdrawn": withdrawn, "pending": pending,
             "acceptance_rate_pct": rate, "takeaway": takeaway}
+
+
+def dashboard(principal: Principal, **filters: Any) -> dict[str, Any]:
+    """Every dashboard metric for one set of filters, in one response. recruiter_load is None
+    for roles that may not see it, so the page can hide that panel."""
+    allowed_load = principal.role in ("admin", "hr_manager")
+    return {
+        "filters": {k: v for k, v in filters.items() if v is not None},
+        "kpis": kpis(principal, **filters),
+        "funnel": funnel(principal, **filters),
+        "days_open_vs_target": days_open_vs_target(principal, **filters),
+        "applicants_over_time": applicants_over_time(principal, by_source=True, **filters),
+        "source_quality": source_quality(principal, **filters),
+        "time_in_stage": time_in_stage(principal, **filters),
+        "withdrawal_reasons": withdrawal_reasons(principal, **filters),
+        "offer_acceptance": offer_acceptance(principal, **filters),
+        "recruiter_load": recruiter_load(principal, **filters) if allowed_load else None,
+    }
