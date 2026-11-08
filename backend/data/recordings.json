@@ -1,0 +1,1006 @@
+{
+ "recordings": [
+  {
+   "question": "What is overdue on the People Operations Partner role?",
+   "user_id": "USR-1",
+   "job_id": null,
+   "scope": [
+    "JOB-1",
+    "JOB-2",
+    "JOB-3",
+    "JOB-4",
+    "JOB-5",
+    "JOB-6",
+    "JOB-7"
+   ],
+   "recorded_at": "2026-11-08T19:27:24Z",
+   "result": {
+    "answer": "4 items are overdue on the People Operations Partner role (JOB-3). Jordan Patel owns all of them. The list is as of 2026-11-09T17:00:00Z, with the most overdue first.\n\n| Task | What | Candidate | Due | Days overdue | Evidence |\n|---|---|---|---|---|---|\n| TASK-011 | Follow up on the offer, which has had no response for more than 5 days | Linden Ravensworth | 2026-11-05 | 3.8 | [APP-062] [EM-048] [EV-0161] |\n| TASK-017 | Reply about the onsite schedule | Avery Vantongeren | 2026-11-07 | 2.2 | [APP-071] |\n| TASK-016 | Get the Technical scorecard from Wren Calloway | Emerson Ormsby | 2026-11-07 | 1.9 | [APP-079] [INT-063] |\n| TASK-018 | Get the Onsite scorecard from Celeste Amari | Dakota Yardley | 2026-11-08 | 1.1 | [APP-076] [INT-071] |\n\n**Not overdue yet, but due soon:**\n- **TASK-015:** Schedule Avery Vantongeren's onsite. Due 2026-11-10 [APP-071].\n- **TASK-020:** Review new applications for this role. Due 2026-11-11.\n\n**What to notice:**\n- **Linden Ravensworth's offer:** This is the oldest item. It's also the only open offer on this role, so it's the most urgent.\n- **Avery Vantongeren:** This candidate has 2 open items: the overdue reply and the onsite scheduling due tomorrow. Both could be handled in one email.\n- **Missing scorecards:** Emerson Ormsby and Dakota Yardley each have an interview without a scorecard. Their records will be incomplete until the scorecards come in.\n\nI can pull the details on any of these, for example the offer email thread for Linden Ravensworth.",
+    "status": "answered",
+    "verified": true,
+    "label": "verified",
+    "citations": [
+     "APP-062",
+     "APP-071",
+     "APP-076",
+     "APP-079",
+     "EM-048",
+     "EV-0161",
+     "INT-063",
+     "INT-071",
+     "JOB-3",
+     "TASK-011",
+     "TASK-015",
+     "TASK-016",
+     "TASK-017",
+     "TASK-018",
+     "TASK-020"
+    ],
+    "steps": [
+     {
+      "tool": "pending_tasks",
+      "input": {
+       "job_id": "JOB-3"
+      },
+      "rows": 6,
+      "is_error": false,
+      "ms": 26
+     }
+    ],
+    "usage": {
+     "api_calls": 2,
+     "input_tokens": 6,
+     "output_tokens": 763,
+     "cache_creation_input_tokens": 3003,
+     "cache_read_input_tokens": 8065,
+     "cache_hits": 2
+    },
+    "latency_ms": 7649,
+    "estimated_cost_usd": 0.031912,
+    "model": "claude-opus-5-5",
+    "served_by": "claude-opus-5-5",
+    "retried": false,
+    "verifier": {
+     "passed": true,
+     "checks": {
+      "numbers": {
+       "passed": true,
+       "checked": 7,
+       "unsupported": []
+      },
+      "citations": {
+       "passed": true,
+       "cited": [
+        "APP-062",
+        "APP-071",
+        "APP-076",
+        "APP-079",
+        "EM-048",
+        "EV-0161",
+        "INT-063",
+        "INT-071",
+        "JOB-3",
+        "TASK-011",
+        "TASK-015",
+        "TASK-016",
+        "TASK-017",
+        "TASK-018",
+        "TASK-020"
+       ],
+       "unknown": []
+      },
+      "ranking": {
+       "passed": true,
+       "lists_checked": 0,
+       "problems": []
+      },
+      "pii": {
+       "passed": true,
+       "found": 0
+      }
+     },
+     "failures": []
+    },
+    "as_of": "2026-11-09T17:00:00Z",
+    "job_id": null,
+    "source": "live"
+   }
+  },
+  {
+   "question": "Where is the Senior Controls Engineer pipeline losing candidates, and why?",
+   "user_id": "USR-1",
+   "job_id": null,
+   "scope": [
+    "JOB-1",
+    "JOB-2",
+    "JOB-3",
+    "JOB-4",
+    "JOB-5",
+    "JOB-6",
+    "JOB-7"
+   ],
+   "recorded_at": "2026-11-08T19:27:04Z",
+   "result": {
+    "answer": "The Senior Controls Engineer pipeline loses most of its candidates **after the onsite, while they wait for a decision**. Most of them go on to accept offers from other companies.\n\n**1. Onsite to Offer: the main leak**\n- 7 candidates have left the Onsite stage. Only 1 moved on to an offer and 6 were lost. That is a pass rate of 14.3%, compared with 66.7% on your other roles.\n- Why they left:\n  - 5 withdrew because they accepted another offer [APP-043] [APP-044] [APP-045] [APP-048] [APP-051].\n  - Only 1 was turned down by the interview panel [APP-049].\n- The likely cause is slow decisions. Candidates who left waited a median of 13.3 days after their last interview and 15.1 days in the stage overall. The Technical stage has a median wait of 3.1 days.\n- This isn't caused by any one source. Candidates from Agency, Careers site, Job board and LinkedIn all had a 0% pass rate at this stage. The one Referral who left the stage got the only offer.\n\n**2. Recruiter Screen to Technical: a smaller leak**\n- The pass rate is 71.4%, close to the 68.0% on your other roles. 6 candidates were lost:\n  - 4 because their experience didn't match the must-haves [APP-041] [APP-047] [APP-052] [APP-057]\n  - 1 because they weren't aligned on the role's scope [APP-055]\n  - 1 who lost interest after the screen [APP-046]\n- Agency candidates account for most of these losses. Only 28.6% of the 7 Agency candidates who left this stage moved on. Careers site and Referral candidates all moved on.\n\n**Stages that are healthy**\n\n| Stage | This role | Other roles | Lost here |\n|---|---|---|---|\n| Applied | 92.6% | 76.7% | 2, failed must-haves [APP-050] [APP-053] |\n| Technical | 90.9% | 67.9% | 1, didn't meet the technical bar [APP-042] |\n\n**Candidates at risk right now**\nThe 3 candidates still at Onsite are all flagged as overdue: they've been in the same stage for more than 7 days. Sam Rivera owns all three:\n\n| Candidate | Days overdue | Evidence |\n|---|---|---|\n| Emerson Everly | 10.4 | [APP-060] [EV-0153] |\n| Ira Ingram | 7.5 | [APP-059] [EV-0149] |\n| Lane Thistlewood | 3.5 | [APP-063] [EV-0165] |\n\nThis is the same pattern that came before the last 5 withdrawals.\n\n**What's missing from this analysis:** I haven't opened the individual scorecards or emails, so I can't tell why the decisions after onsites are slow. Possible causes include late scorecards, the panel's schedule, or approvals.\n\n**Possible next steps:** have people decide faster after onsites, starting with the three candidates above. Also consider tightening how agency candidates are screened against the must-haves. These decisions are for you and the hiring team to make. I can pull the evidence for the three current Onsite candidates if that would help.",
+    "status": "answered",
+    "verified": true,
+    "label": "verified",
+    "citations": [
+     "APP-041",
+     "APP-042",
+     "APP-043",
+     "APP-044",
+     "APP-045",
+     "APP-046",
+     "APP-047",
+     "APP-048",
+     "APP-049",
+     "APP-050",
+     "APP-051",
+     "APP-052",
+     "APP-053",
+     "APP-055",
+     "APP-057",
+     "APP-059",
+     "APP-060",
+     "APP-063",
+     "EV-0149",
+     "EV-0153",
+     "EV-0165"
+    ],
+    "steps": [
+     {
+      "tool": "funnel_dropoff",
+      "input": {
+       "job_id": "JOB-1"
+      },
+      "rows": 21,
+      "is_error": false,
+      "ms": 26
+     },
+     {
+      "tool": "pending_tasks",
+      "input": {
+       "job_id": "JOB-1"
+      },
+      "rows": 3,
+      "is_error": false,
+      "ms": 7
+     }
+    ],
+    "usage": {
+     "api_calls": 3,
+     "input_tokens": 8,
+     "output_tokens": 1564,
+     "cache_creation_input_tokens": 9031,
+     "cache_read_input_tokens": 12854,
+     "cache_hits": 2
+    },
+    "latency_ms": 15821,
+    "estimated_cost_usd": 0.079038,
+    "model": "claude-opus-5-5",
+    "served_by": "claude-opus-5-5",
+    "retried": false,
+    "verifier": {
+     "passed": true,
+     "checks": {
+      "numbers": {
+       "passed": true,
+       "checked": 33,
+       "unsupported": []
+      },
+      "citations": {
+       "passed": true,
+       "cited": [
+        "APP-041",
+        "APP-042",
+        "APP-043",
+        "APP-044",
+        "APP-045",
+        "APP-046",
+        "APP-047",
+        "APP-048",
+        "APP-049",
+        "APP-050",
+        "APP-051",
+        "APP-052",
+        "APP-053",
+        "APP-055",
+        "APP-057",
+        "APP-059",
+        "APP-060",
+        "APP-063",
+        "EV-0149",
+        "EV-0153",
+        "EV-0165"
+       ],
+       "unknown": []
+      },
+      "ranking": {
+       "passed": true,
+       "lists_checked": 0,
+       "problems": []
+      },
+      "pii": {
+       "passed": true,
+       "found": 0
+      }
+     },
+     "failures": []
+    },
+    "as_of": "2026-11-09T17:00:00Z",
+    "job_id": null,
+    "source": "live"
+   }
+  },
+  {
+   "question": "Who are the top 3 candidates for the Manufacturing Process Engineer role?",
+   "user_id": "USR-1",
+   "job_id": null,
+   "scope": [
+    "JOB-1",
+    "JOB-2",
+    "JOB-3",
+    "JOB-4",
+    "JOB-5",
+    "JOB-6",
+    "JOB-7"
+   ],
+   "recorded_at": "2026-11-08T19:27:15Z",
+   "result": {
+    "answer": "For the Manufacturing Process Engineer role (JOB-2), these are the top 3 of the 18 active candidates. The ranking uses rubric v1: scorecards count for 50%, must-have skill ratings for 30% and the furthest stage reached for 20%.\n\n| Rank | Candidate | Stage | Score | Scorecards (avg points) | Must-have avg (SPC / PFMEA / RCA) |\n|---|---|---|---|---|---|\n| 1 | Hollis Bellweather [APP-068] | Onsite | 0.9089 | 4.0 | 4.0 / 3.67 / 4.0 |\n| 2 | Harper Oakhurst [APP-067] | Onsite | 0.8089 | 3.67 | 3.0 / 3.67 / 3.67 |\n| 3 | Marlowe Sterling [APP-065] | Onsite | 0.72 | 3.33 | 3.0 / 3.33 / 3.0 |\n\nSPC is statistical process control, PFMEA is process failure mode and effects analysis, and RCA is root cause analysis.\n\n**Why they rank this way**\n- **Hollis Bellweather** got the top score on all three scorecards: 4.0 average points, for 0.5 of a possible 0.5 [SC-045, SC-060, SC-061]. Hollis also rated highest on the must-have skills, scoring 4.0 on SPC and RCA, which adds 0.2889. Reaching Onsite adds 0.12 [EV-0180].\n- **Harper Oakhurst** is about 0.10 behind. Harper's scorecards were a little lower at 3.67 average, adding 0.4444 [SC-046, SC-063, SC-065]. Harper's weakest skill was SPC at 3.0, and the must-have part adds 0.2444. Onsite adds 0.12 [EV-0176].\n- **Marlowe Sterling** has the lowest scorecard average of the three at 3.33, adding 0.3889 [SC-044, SC-057, SC-058]. Marlowe's must-have ratings average 3.0 to 3.33, adding 0.2111. Onsite adds 0.12 [EV-0171].\n\nAll three are at Onsite, so the stage part (0.12) is the same for each. The gaps come from the scorecards and the skill ratings. None of the three has missing evidence: each has 3 scorecards.\n\nSeven candidates are at Onsite for this role, so four others are at the same stage but scored lower. I can show a longer ranking if that would help with comparisons.\n\nThis ranking is meant to help with the decision. The hiring team makes the final call.",
+    "status": "answered",
+    "verified": true,
+    "label": "verified",
+    "citations": [
+     "APP-065",
+     "APP-067",
+     "APP-068",
+     "EV-0171",
+     "EV-0176",
+     "EV-0180",
+     "JOB-2",
+     "SC-044",
+     "SC-045",
+     "SC-046",
+     "SC-057",
+     "SC-058",
+     "SC-060",
+     "SC-061",
+     "SC-063",
+     "SC-065"
+    ],
+    "steps": [
+     {
+      "tool": "score_candidates",
+      "input": {
+       "job_id": "JOB-2",
+       "top_n": 3
+      },
+      "rows": 3,
+      "is_error": false,
+      "ms": 25
+     }
+    ],
+    "usage": {
+     "api_calls": 2,
+     "input_tokens": 6,
+     "output_tokens": 994,
+     "cache_creation_input_tokens": 2951,
+     "cache_read_input_tokens": 8076,
+     "cache_hits": 2
+    },
+    "latency_ms": 9948,
+    "estimated_cost_usd": 0.036274,
+    "model": "claude-opus-5-5",
+    "served_by": "claude-opus-5-5",
+    "retried": false,
+    "verifier": {
+     "passed": true,
+     "checks": {
+      "numbers": {
+       "passed": true,
+       "checked": 43,
+       "unsupported": []
+      },
+      "citations": {
+       "passed": true,
+       "cited": [
+        "APP-065",
+        "APP-067",
+        "APP-068",
+        "EV-0171",
+        "EV-0176",
+        "EV-0180",
+        "JOB-2",
+        "SC-044",
+        "SC-045",
+        "SC-046",
+        "SC-057",
+        "SC-058",
+        "SC-060",
+        "SC-061",
+        "SC-063",
+        "SC-065"
+       ],
+       "unknown": []
+      },
+      "ranking": {
+       "passed": true,
+       "lists_checked": 1,
+       "problems": []
+      },
+      "pii": {
+       "passed": true,
+       "found": 0
+      }
+     },
+     "failures": []
+    },
+    "as_of": "2026-11-09T17:00:00Z",
+    "job_id": null,
+    "source": "live"
+   }
+  },
+  {
+   "question": "What is overdue on the People Operations Partner role?",
+   "user_id": "USR-2",
+   "job_id": null,
+   "scope": [
+    "JOB-1",
+    "JOB-2",
+    "JOB-4",
+    "JOB-5"
+   ],
+   "recorded_at": "2026-11-08T19:28:03Z",
+   "result": {
+    "answer": "The People Operations Partner role isn't in your scope, so I can't see anything about it, including overdue items.\n\nThese are the jobs you can see:\n\n| Job ID | Title | Status |\n|---|---|---|\n| JOB-1 | Senior Controls Engineer | open |\n| JOB-2 | Manufacturing Process Engineer | open |\n| JOB-4 | Robotics Software Engineer | filled |\n| JOB-5 | Quality Technician | filled |\n\nYour scope shows 4 overdue items across these jobs. I can list them with owners and how many days overdue each one is. Or, if you think you should have access to the People Operations Partner role, ask an admin to check your permissions.",
+    "status": "answered",
+    "verified": true,
+    "label": "verified",
+    "citations": [
+     "JOB-1",
+     "JOB-2",
+     "JOB-4",
+     "JOB-5"
+    ],
+    "steps": [],
+    "usage": {
+     "api_calls": 1,
+     "input_tokens": 4,
+     "output_tokens": 372,
+     "cache_creation_input_tokens": 1055,
+     "cache_read_input_tokens": 3299,
+     "cache_hits": 1
+    },
+    "latency_ms": 4043,
+    "estimated_cost_usd": 0.013391,
+    "model": "claude-opus-5-5",
+    "served_by": "claude-opus-5-5",
+    "retried": false,
+    "verifier": {
+     "passed": true,
+     "checks": {
+      "numbers": {
+       "passed": true,
+       "checked": 1,
+       "unsupported": []
+      },
+      "citations": {
+       "passed": true,
+       "cited": [
+        "JOB-1",
+        "JOB-2",
+        "JOB-4",
+        "JOB-5"
+       ],
+       "unknown": []
+      },
+      "ranking": {
+       "passed": true,
+       "lists_checked": 0,
+       "problems": []
+      },
+      "pii": {
+       "passed": true,
+       "found": 0
+      }
+     },
+     "failures": []
+    },
+    "as_of": "2026-11-09T17:00:00Z",
+    "job_id": null,
+    "source": "live"
+   }
+  },
+  {
+   "question": "Where is the Senior Controls Engineer pipeline losing candidates, and why?",
+   "user_id": "USR-2",
+   "job_id": null,
+   "scope": [
+    "JOB-1",
+    "JOB-2",
+    "JOB-4",
+    "JOB-5"
+   ],
+   "recorded_at": "2026-11-08T19:27:45Z",
+   "result": {
+    "answer": "The Senior Controls Engineer pipeline loses most of its candidates **after the onsite**. Candidates wait too long to hear back after their onsite interview, and most accept other offers before a decision reaches them.\n\n## Where candidates drop out (JOB-1)\n\n| Stage | Entered | Advanced | Rejected | Withdrew | Still active | Pass rate | Other roles |\n|---|---|---|---|---|---|---|---|\n| Applied | 30 | 25 | 2 | 0 | 3 | 92.6% | 77.5% |\n| Recruiter Screen | 25 | 15 | 5 | 1 | 4 | 71.4% | 75.0% |\n| Technical | 15 | 10 | 1 | 0 | 4 | 90.9% | 70.6% |\n| **Onsite** | **10** | **1** | **1** | **5** | **3** | **14.3%** | **60.0%** |\n| Offer | 1 | 0 | 0 | 0 | 1 | n/a | 66.7% |\n\nNobody has been hired yet, and the role has been open 125 days.\n\n## 1. Onsite to Offer: the main leak\n- **What happens:** 7 candidates have left this stage and 6 of them were lost. 5 withdrew because they accepted another offer [APP-043] [APP-044] [APP-045] [APP-048] [APP-051]. 1 was rejected because the panel did not recommend a hire [APP-049].\n- **Why:** This looks like slow follow-up, not weak candidates.\n  - Candidates sit in Onsite for a median of 15.1 days before leaving, compared with 2.6 to 4.5 days at earlier stages.\n  - The median wait after the last interview is 13.3 days, compared with 3.1 days after the technical interview.\n  - I read two of the withdrawal emails, and both say the same thing: \"I have not heard back since my onsite.\"\n    - Jett Yardley did the onsite on 2026-09-03 [INT-026] and withdrew on 2026-09-17 [EM-014].\n    - Kai Vantongeren did the onsite on 2026-09-17 [INT-033] and withdrew on 2026-10-02 [EM-022].\n  - I did not open the other three withdrawals, so I have not confirmed they give the same reason.\n- **Source isn't the cause:** Every source except Referral has a 0% pass rate at this stage. The single Referral exit advanced, but one candidate is too few to read anything into.\n\n## 2. Recruiter Screen: a smaller leak\n- 6 of 21 exits were lost, a pass rate of 71.4% against 75.0% for other roles.\n  - 4 had experience that did not match the must-haves [APP-041] [APP-047] [APP-052] [APP-057].\n  - 1 was not aligned on role scope [APP-055].\n  - 1 was not interested after the screen [APP-046].\n- **Agency candidates make up most of this leak.** They pass the screen at only 28.6% (7 exits), while other sources pass at 80% to 100%. Agency candidates also pass the Applied stage at 100%. Together that suggests agency profiles get through the first review but don't hold up at the screen.\n\nTechnical (1 rejected [APP-042]) and Applied (2 rejected [APP-050] [APP-053]) lose very few candidates.\n\n## The same risk is live now\nAll 3 candidates currently in Onsite are overdue under the \"same stage over 7 days\" rule. The owner for each is Sam Rivera:\n\n| Candidate | Days overdue | Evidence |\n|---|---|---|\n| Emerson Everly | 10.4 | [APP-060] [EV-0153] |\n| Ira Ingram | 7.5 | [APP-059] [EV-0149] |\n| Lane Thistlewood | 3.5 | [APP-063] [EV-0165] |\n\nBased on what happened to the earlier candidates, these three are the most likely to withdraw next. A decision or an update to each of them soon may matter more than any other fix.\n\n## Data caveat\nThe Interview notes sync is **Degraded**. It had a 100% error rate over the last 24 hours, and some scorecards could not be imported. If the delay after onsites comes from missing scorecards, some of those scorecards may be in the records but not imported yet. The ATS and Email syncs are healthy, so the stage counts and emails above are current.\n\nThese are findings to help you decide what to change. Decisions about candidates stay with you and the hiring team.",
+    "status": "answered",
+    "verified": true,
+    "label": "verified",
+    "citations": [
+     "APP-041",
+     "APP-042",
+     "APP-043",
+     "APP-044",
+     "APP-045",
+     "APP-046",
+     "APP-047",
+     "APP-048",
+     "APP-049",
+     "APP-050",
+     "APP-051",
+     "APP-052",
+     "APP-053",
+     "APP-055",
+     "APP-057",
+     "APP-059",
+     "APP-060",
+     "APP-063",
+     "EM-014",
+     "EM-022",
+     "EV-0149",
+     "EV-0153",
+     "EV-0165",
+     "INT-026",
+     "INT-033",
+     "JOB-1"
+    ],
+    "steps": [
+     {
+      "tool": "funnel_dropoff",
+      "input": {
+       "job_id": "JOB-1"
+      },
+      "rows": 18,
+      "is_error": false,
+      "ms": 28
+     },
+     {
+      "tool": "integration_health",
+      "input": {},
+      "rows": 5,
+      "is_error": false,
+      "ms": 27
+     },
+     {
+      "tool": "pending_tasks",
+      "input": {
+       "job_id": "JOB-1"
+      },
+      "rows": 3,
+      "is_error": false,
+      "ms": 17
+     },
+     {
+      "tool": "get_candidate_evidence",
+      "input": {
+       "application_id": "APP-043",
+       "sections": [
+        "emails",
+        "history"
+       ]
+      },
+      "rows": 4,
+      "is_error": false,
+      "ms": 14
+     },
+     {
+      "tool": "get_candidate_evidence",
+      "input": {
+       "application_id": "APP-048",
+       "sections": [
+        "emails",
+        "history"
+       ]
+      },
+      "rows": 4,
+      "is_error": false,
+      "ms": 13
+     }
+    ],
+    "usage": {
+     "api_calls": 3,
+     "input_tokens": 8,
+     "output_tokens": 1989,
+     "cache_creation_input_tokens": 10091,
+     "cache_read_input_tokens": 16455,
+     "cache_hits": 3
+    },
+    "latency_ms": 20436,
+    "estimated_cost_usd": 0.093558,
+    "model": "claude-opus-5-5",
+    "served_by": "claude-opus-5-5",
+    "retried": false,
+    "verifier": {
+     "passed": true,
+     "checks": {
+      "numbers": {
+       "passed": true,
+       "checked": 68,
+       "unsupported": []
+      },
+      "citations": {
+       "passed": true,
+       "cited": [
+        "APP-041",
+        "APP-042",
+        "APP-043",
+        "APP-044",
+        "APP-045",
+        "APP-046",
+        "APP-047",
+        "APP-048",
+        "APP-049",
+        "APP-050",
+        "APP-051",
+        "APP-052",
+        "APP-053",
+        "APP-055",
+        "APP-057",
+        "APP-059",
+        "APP-060",
+        "APP-063",
+        "EM-014",
+        "EM-022",
+        "EV-0149",
+        "EV-0153",
+        "EV-0165",
+        "INT-026",
+        "INT-033",
+        "JOB-1"
+       ],
+       "unknown": []
+      },
+      "ranking": {
+       "passed": true,
+       "lists_checked": 0,
+       "problems": []
+      },
+      "pii": {
+       "passed": true,
+       "found": 0
+      }
+     },
+     "failures": []
+    },
+    "as_of": "2026-11-09T17:00:00Z",
+    "job_id": null,
+    "source": "live"
+   }
+  },
+  {
+   "question": "Who are the top 3 candidates for the Manufacturing Process Engineer role?",
+   "user_id": "USR-2",
+   "job_id": null,
+   "scope": [
+    "JOB-1",
+    "JOB-2",
+    "JOB-4",
+    "JOB-5"
+   ],
+   "recorded_at": "2026-11-08T19:27:58Z",
+   "result": {
+    "answer": "Here are the top 3 for Manufacturing Process Engineer (JOB-2), out of 18 active candidates. The ranking uses scoring rubric v1: 50% interview scorecards, 30% must-have skill ratings and 20% furthest stage reached.\n\n| Rank | Candidate | Stage | Score | Scorecards (avg of 4) | Must-have ratings (SPC / PFMEA / RCA) |\n|---|---|---|---|---|---|\n| 1 | Hollis Bellweather [APP-068] | Onsite | 0.9089 | 4.0 | 4.0 / 3.67 / 4.0 |\n| 2 | Harper Oakhurst [APP-067] | Onsite | 0.8089 | 3.67 | 3.0 / 3.67 / 3.67 |\n| 3 | Marlowe Sterling [APP-065] | Onsite | 0.72 | 3.33 | 3.0 / 3.33 / 3.0 |\n\nSPC is statistical process control and RCA is root cause analysis.\n\n**Why they rank this way**\n- All three have reached Onsite, so they get the same stage points (0.12 each) [EV-0180] [EV-0176] [EV-0171]. Their places come from the scorecards and skill ratings.\n- **Hollis Bellweather** got the top score (4.0) on all 3 scorecards and is rated highest on SPC and RCA [SC-045] [SC-060] [SC-061].\n- **Harper Oakhurst** has strong scorecards. Their SPC rating (3.0) is the weakest of their three skills [SC-046] [SC-063] [SC-065].\n- **Marlowe Sterling** scores solidly but is lower than the other two on every part [SC-044] [SC-057] [SC-058].\n\nNone of the three is missing any evidence. Each has 3 scorecards.\n\n**Data gaps that could change the ranking**\n- **Interview notes sync is having problems.** The integration shows 100% errors in the last 24 hours, and the last sync said some scorecards could not be imported. Some scorecards for this role may not be in the system yet.\n- **Reese Jessup [APP-075] is missing an Onsite scorecard.** It is due from Nadia Ferro and is 2.4 days overdue. Alex Chen owns the follow-up [TASK-014]. Reese Jessup is not in the top 3 right now, but could move once that scorecard arrives.\n\nI'd re-run this ranking once the sync is fixed and that scorecard is in. The ranking is there to support your decision. People make the hiring decision.",
+    "status": "answered",
+    "verified": true,
+    "label": "verified",
+    "citations": [
+     "APP-065",
+     "APP-067",
+     "APP-068",
+     "APP-075",
+     "EV-0171",
+     "EV-0176",
+     "EV-0180",
+     "JOB-2",
+     "SC-044",
+     "SC-045",
+     "SC-046",
+     "SC-057",
+     "SC-058",
+     "SC-060",
+     "SC-061",
+     "SC-063",
+     "SC-065",
+     "TASK-014"
+    ],
+    "steps": [
+     {
+      "tool": "score_candidates",
+      "input": {
+       "job_id": "JOB-2",
+       "top_n": 3
+      },
+      "rows": 3,
+      "is_error": false,
+      "ms": 27
+     },
+     {
+      "tool": "integration_health",
+      "input": {},
+      "rows": 5,
+      "is_error": false,
+      "ms": 26
+     },
+     {
+      "tool": "pending_tasks",
+      "input": {
+       "job_id": "JOB-2"
+      },
+      "rows": 1,
+      "is_error": false,
+      "ms": 6
+     }
+    ],
+    "usage": {
+     "api_calls": 3,
+     "input_tokens": 8,
+     "output_tokens": 1115,
+     "cache_creation_input_tokens": 4259,
+     "cache_read_input_tokens": 14652,
+     "cache_hits": 3
+    },
+    "latency_ms": 12221,
+    "estimated_cost_usd": 0.046557,
+    "model": "claude-opus-5-5",
+    "served_by": "claude-opus-5-5",
+    "retried": false,
+    "verifier": {
+     "passed": true,
+     "checks": {
+      "numbers": {
+       "passed": true,
+       "checked": 33,
+       "unsupported": []
+      },
+      "citations": {
+       "passed": true,
+       "cited": [
+        "APP-065",
+        "APP-067",
+        "APP-068",
+        "APP-075",
+        "EV-0171",
+        "EV-0176",
+        "EV-0180",
+        "JOB-2",
+        "SC-044",
+        "SC-045",
+        "SC-046",
+        "SC-057",
+        "SC-058",
+        "SC-060",
+        "SC-061",
+        "SC-063",
+        "SC-065",
+        "TASK-014"
+       ],
+       "unknown": []
+      },
+      "ranking": {
+       "passed": true,
+       "lists_checked": 1,
+       "problems": []
+      },
+      "pii": {
+       "passed": true,
+       "found": 0
+      }
+     },
+     "failures": []
+    },
+    "as_of": "2026-11-09T17:00:00Z",
+    "job_id": null,
+    "source": "live"
+   }
+  },
+  {
+   "question": "What is overdue on the People Operations Partner role?",
+   "user_id": "USR-4",
+   "job_id": null,
+   "scope": [
+    "JOB-1",
+    "JOB-5",
+    "JOB-7"
+   ],
+   "recorded_at": "2026-11-08T19:28:34Z",
+   "result": {
+    "answer": "I can't find a People Operations Partner role among the jobs you can see, so it's **outside your scope** and I can't report on it.\n\nThese are the jobs you have access to:\n\n| Job ID | Title | Status |\n|---|---|---|\n| JOB-1 | Senior Controls Engineer | open |\n| JOB-5 | Quality Technician | filled |\n| JOB-7 | HR Coordinator | cancelled |\n\nYour access summary shows **3 overdue items** across these jobs.\n\nDid you mean one of these?\n1. **JOB-7 HR Coordinator.** This is the closest people-team role, but it's cancelled and has no active candidates.\n2. **All 3 overdue items** across your jobs.\n3. **Someone else's role.** If People Operations Partner belongs to another recruiter or team, they or an HR Manager would need to check it.\n\nTell me which one, and I'll pull the overdue tasks with their owners and evidence IDs.",
+    "status": "answered",
+    "verified": true,
+    "label": "verified",
+    "citations": [
+     "JOB-1",
+     "JOB-5",
+     "JOB-7"
+    ],
+    "steps": [],
+    "usage": {
+     "api_calls": 1,
+     "input_tokens": 4,
+     "output_tokens": 534,
+     "cache_creation_input_tokens": 662,
+     "cache_read_input_tokens": 3299,
+     "cache_hits": 1
+    },
+    "latency_ms": 5500,
+    "estimated_cost_usd": 0.014666,
+    "model": "claude-opus-5-5",
+    "served_by": "claude-opus-5-5",
+    "retried": false,
+    "verifier": {
+     "passed": true,
+     "checks": {
+      "numbers": {
+       "passed": true,
+       "checked": 2,
+       "unsupported": []
+      },
+      "citations": {
+       "passed": true,
+       "cited": [
+        "JOB-1",
+        "JOB-5",
+        "JOB-7"
+       ],
+       "unknown": []
+      },
+      "ranking": {
+       "passed": true,
+       "lists_checked": 0,
+       "problems": []
+      },
+      "pii": {
+       "passed": true,
+       "found": 0
+      }
+     },
+     "failures": []
+    },
+    "as_of": "2026-11-09T17:00:00Z",
+    "job_id": null,
+    "source": "live"
+   }
+  },
+  {
+   "question": "Where is the Senior Controls Engineer pipeline losing candidates, and why?",
+   "user_id": "USR-4",
+   "job_id": null,
+   "scope": [
+    "JOB-1",
+    "JOB-5",
+    "JOB-7"
+   ],
+   "recorded_at": "2026-11-08T19:28:23Z",
+   "result": {
+    "answer": "**Short answer:** The pipeline loses most of its candidates after the onsite interview, and the likely cause is slow follow-up. Strong candidates wait about two weeks with no news, then take other offers.\n\n## Where candidates leave\n\n| Stage | Entered | Moved on | Rejected | Withdrew | Still here | Pass rate | Other roles |\n|---|---|---|---|---|---|---|---|\n| Applied | 30 | 25 | 2 | 0 | 3 | 92.6% | 70.0% |\n| Recruiter Screen | 25 | 15 | 5 | 1 | 4 | 71.4% | 42.9% |\n| Technical | 15 | 10 | 1 | 0 | 4 | 90.9% | 33.3% |\n| **Onsite** | **10** | **1** | **1** | **5** | **3** | **14.3%** | **50.0%** |\n| Offer | 1 | 0 | 0 | 0 | 1 | n/a | 100.0% |\n\nThe earlier stages pass candidates at higher rates than the other roles you can see. Onsite is the one stage that does much worse.\n\n## Why: the onsite stage (biggest leak)\n\n- **6 of the 7 candidates who left the onsite stage were lost.** 5 withdrew because they accepted another offer [APP-043, APP-044, APP-045, APP-048, APP-051]. Only 1 was turned down by the panel [APP-049].\n- **The wait is long.** Candidates left a median of 15.1 days after reaching onsite, and 13.3 days after their last interview. At the technical stage the gap after the last interview was 3.1 days.\n- **Candidates said the silence was the reason.** I read the emails for 2 of the 5 who withdrew:\n  - Jett Yardley had their onsite on 2026-09-03 [INT-026]. They withdrew on 2026-09-17, writing that they had \"not heard back since my onsite\" and had accepted another offer [EM-014].\n  - Kai Vantongeren had their onsite on 2026-09-17 [INT-033]. They withdrew on 2026-10-02 with the same message [EM-022].\n  - I did not open the other three withdrawals (APP-044, APP-045, APP-051), so I can't confirm they give the same reason.\n- **Source doesn't explain it.** Agency, careers site, job board and LinkedIn candidates all passed onsite at 0%. The only candidate who got through came from a referral, so that comparison rests on one person.\n\n## The same risk exists today\n\nAll 3 candidates currently at onsite are overdue for a decision. Each has an open task owned by Sam Rivera:\n\n| Candidate | Overdue by | Evidence |\n|---|---|---|\n| Emerson Everly | 10.4 days | [EV-0153], [APP-060] |\n| Ira Ingram | 7.5 days | [EV-0149], [APP-059] |\n| Lane Thistlewood | 3.5 days | [EV-0165], [APP-063] |\n\n## Smaller leak: the recruiter screen\n\n6 candidates left at the recruiter screen:\n- 4 were rejected because their experience didn't match the must-haves [APP-041, APP-047, APP-052, APP-057].\n- 1 was not aligned on the role's scope [APP-055].\n- 1 lost interest after the screen [APP-046].\n\nAgency candidates passed the screen least often: 28.6%, out of 7 who left the stage. Every other source passed at 80% to 100%. It may be worth checking how the agency's brief describes the must-haves.\n\n## Data caveat\n\nThe Interview notes integration is degraded. Its last sync (SYNC-278) reported that some scorecards could not be imported. Stage counts and emails come from healthy sources, but some onsite feedback may be missing. That could partly explain why decisions seem to stall.\n\n**Suggestion:** Your team could decide on the 3 waiting onsite candidates soon and set a target time for post-onsite decisions. The past withdrawals suggest that waiting about two weeks costs candidates. That decision is yours and your team's to make.",
+    "status": "answered",
+    "verified": true,
+    "label": "verified",
+    "citations": [
+     "APP-041",
+     "APP-043",
+     "APP-044",
+     "APP-045",
+     "APP-046",
+     "APP-047",
+     "APP-048",
+     "APP-049",
+     "APP-051",
+     "APP-052",
+     "APP-055",
+     "APP-057",
+     "APP-059",
+     "APP-060",
+     "APP-063",
+     "EM-014",
+     "EM-022",
+     "EV-0149",
+     "EV-0153",
+     "EV-0165",
+     "INT-026",
+     "INT-033",
+     "SYNC-278"
+    ],
+    "steps": [
+     {
+      "tool": "funnel_dropoff",
+      "input": {
+       "job_id": "JOB-1"
+      },
+      "rows": 17,
+      "is_error": false,
+      "ms": 30
+     },
+     {
+      "tool": "integration_health",
+      "input": {},
+      "rows": 5,
+      "is_error": false,
+      "ms": 28
+     },
+     {
+      "tool": "get_candidate_evidence",
+      "input": {
+       "application_id": "APP-043",
+       "sections": [
+        "emails",
+        "history"
+       ]
+      },
+      "rows": 4,
+      "is_error": false,
+      "ms": 13
+     },
+     {
+      "tool": "get_candidate_evidence",
+      "input": {
+       "application_id": "APP-048",
+       "sections": [
+        "emails",
+        "history"
+       ]
+      },
+      "rows": 4,
+      "is_error": false,
+      "ms": 12
+     },
+     {
+      "tool": "pending_tasks",
+      "input": {
+       "job_id": "JOB-1"
+      },
+      "rows": 3,
+      "is_error": false,
+      "ms": 15
+     }
+    ],
+    "usage": {
+     "api_calls": 3,
+     "input_tokens": 8,
+     "output_tokens": 1860,
+     "cache_creation_input_tokens": 9700,
+     "cache_read_input_tokens": 15660,
+     "cache_hits": 3
+    },
+    "latency_ms": 18716,
+    "estimated_cost_usd": 0.088864,
+    "model": "claude-opus-5-5",
+    "served_by": "claude-opus-5-5",
+    "retried": false,
+    "verifier": {
+     "passed": true,
+     "checks": {
+      "numbers": {
+       "passed": true,
+       "checked": 57,
+       "unsupported": []
+      },
+      "citations": {
+       "passed": true,
+       "cited": [
+        "APP-041",
+        "APP-043",
+        "APP-044",
+        "APP-045",
+        "APP-046",
+        "APP-047",
+        "APP-048",
+        "APP-049",
+        "APP-051",
+        "APP-052",
+        "APP-055",
+        "APP-057",
+        "APP-059",
+        "APP-060",
+        "APP-063",
+        "EM-014",
+        "EM-022",
+        "EV-0149",
+        "EV-0153",
+        "EV-0165",
+        "INT-026",
+        "INT-033",
+        "SYNC-278"
+       ],
+       "unknown": []
+      },
+      "ranking": {
+       "passed": true,
+       "lists_checked": 0,
+       "problems": []
+      },
+      "pii": {
+       "passed": true,
+       "found": 0
+      }
+     },
+     "failures": []
+    },
+    "as_of": "2026-11-09T17:00:00Z",
+    "job_id": null,
+    "source": "live"
+   }
+  },
+  {
+   "question": "Who are the top 3 candidates for the Manufacturing Process Engineer role?",
+   "user_id": "USR-4",
+   "job_id": null,
+   "scope": [
+    "JOB-1",
+    "JOB-5",
+    "JOB-7"
+   ],
+   "recorded_at": "2026-11-08T19:28:28Z",
+   "result": {
+    "answer": "**I can't rank candidates for the Manufacturing Process Engineer role. That role isn't one of the jobs you have access to.**\n\nYou can see these jobs:\n\n| Job ID | Title | Status | Active candidates |\n|---|---|---|---|\n| JOB-1 | Senior Controls Engineer | open | 15 |\n| JOB-5 | Quality Technician | filled | 0 |\n| JOB-7 | HR Coordinator | cancelled | 0 |\n\nOnly JOB-1 has active candidates. If you need data on the Manufacturing Process Engineer role, ask an Admin or HR Manager to give you access to it.\n\nI can rank the top 3 for **JOB-1, Senior Controls Engineer**, if that helps. I'd show each person's score breakdown and the evidence behind it. A ranking only supports a hiring decision. People make the decision.",
+    "status": "answered",
+    "verified": true,
+    "label": "verified",
+    "citations": [
+     "JOB-1",
+     "JOB-5",
+     "JOB-7"
+    ],
+    "steps": [],
+    "usage": {
+     "api_calls": 1,
+     "input_tokens": 4,
+     "output_tokens": 402,
+     "cache_creation_input_tokens": 673,
+     "cache_read_input_tokens": 3299,
+     "cache_hits": 1
+    },
+    "latency_ms": 3989,
+    "estimated_cost_usd": 0.012081,
+    "model": "claude-opus-5-5",
+    "served_by": "claude-opus-5-5",
+    "retried": false,
+    "verifier": {
+     "passed": true,
+     "checks": {
+      "numbers": {
+       "passed": true,
+       "checked": 4,
+       "unsupported": []
+      },
+      "citations": {
+       "passed": true,
+       "cited": [
+        "JOB-1",
+        "JOB-5",
+        "JOB-7"
+       ],
+       "unknown": []
+      },
+      "ranking": {
+       "passed": true,
+       "lists_checked": 0,
+       "problems": []
+      },
+      "pii": {
+       "passed": true,
+       "found": 0
+      }
+     },
+     "failures": []
+    },
+    "as_of": "2026-11-09T17:00:00Z",
+    "job_id": null,
+    "source": "live"
+   }
+  }
+ ]
+}
