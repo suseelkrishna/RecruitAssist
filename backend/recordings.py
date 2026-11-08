@@ -25,7 +25,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parent
 RECORDINGS_FILE = ROOT / "recordings" / "answers.json"
-DB_PATH = ROOT / "recruiting.db"
+DB_PATH = ROOT / "data" / "recruiting.db"
 EVALS_OUT = ROOT / "evals_out"
 TIME_FMT = "%Y-%m-%d %H:%M:%S"
 

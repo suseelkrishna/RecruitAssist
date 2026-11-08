@@ -34,7 +34,7 @@ import recordings
 from recordings import STAGES, answer_step, strip_tool_error, tool_steps
 
 ROOT = Path(__file__).resolve().parent
-DB_PATH = ROOT / "recruiting.db"
+DB_PATH = ROOT / "data" / "recruiting.db"
 README = ROOT / "README.md"
 EVALS_OUT = ROOT / "evals_out"
 SCORES_FILE = ROOT / "tests" / "eval_scores.json"
@@ -131,7 +131,7 @@ def friendly_error(exc: BaseException) -> str:
     if isinstance(exc, anthropic.APIStatusError):
         return f"Claude returned an error ({exc.status_code}). Try again in a moment."
     if not DB_PATH.exists():
-        return "The recruiting database is missing. Run `python generate_data.py` first."
+        return "The recruiting database is missing. Run `uv run python data/generate.py` first."
     if isinstance(exc, OSError):
         return "Couldn't start the recruiting data server (server.py)."
     return "Something went wrong while answering. Try again, or try a different question."
@@ -418,7 +418,7 @@ def tab_snapshot() -> None:
     if not stuck["candidates"]:
         st.success("Nobody is stuck that long.")
     else:
-        table = pd.DataFrame(stuck["candidates"])[["first_name", "job_title", "stage", "days_in_stage"]]
+        table = pd.DataFrame(stuck["candidates"])[["full_name", "job_title", "stage", "days_in_stage"]]
         table.columns = ["Candidate", "Job", "Stage", "Days in stage"]
         st.dataframe(table, hide_index=True, width="stretch", column_config={
             "Days in stage": st.column_config.NumberColumn(format="%.1f")})
@@ -586,7 +586,7 @@ FLOW_STEPS = [
      "Every tool call takes this path.",
      "A single execution path is easy to audit, permission and log."),
     (3, 4, "Read-only SQL", "Server queries SQLite",
-     "server.py runs a fixed, parameterized query against recruiting.db, "
+     "server.py runs a fixed, parameterized query against data/recruiting.db, "
      "opened with mode=ro.",
      "Writes are rejected at the connection level, and arguments are bound as "
      "parameters, never interpolated into SQL."),
@@ -739,7 +739,7 @@ def main() -> None:
     st.set_page_config(page_title="Recruiting Pipeline Assistant", page_icon="📊", layout="wide")
     st.title("Recruiting Pipeline Assistant (synthetic data)")
     if not DB_PATH.exists():
-        st.error("The recruiting database is missing. Run `python generate_data.py`, then refresh.")
+        st.error("The recruiting database is missing. Run `uv run python data/generate.py`, then refresh.")
 
     ask, snap, trust, flow = st.tabs(["Ask a question", "Pipeline snapshot",
                                       "How we know it's right", "How it works"])

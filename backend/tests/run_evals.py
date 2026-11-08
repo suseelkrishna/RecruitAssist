@@ -10,7 +10,7 @@ Each run is saved in its own folder, evals_out/<YYYY-MM-DD_HHMMSS>/ (ignored by
 git), with one transcript per question and a meta.json naming the model and
 questions. The Streamlit app reads the newest folder.
 
-Usage (from the project folder, after `python generate_data.py`):
+Usage (from the project folder, after `uv run python data/generate.py`):
     python tests/run_evals.py                 # all questions
     python tests/run_evals.py --only 4 10     # just questions 4 and 10
     python tests/run_evals.py --model opus    # pick the model
@@ -99,8 +99,8 @@ def main() -> None:
 
     if not shutil.which("claude"):
         sys.exit("The `claude` command isn't on your PATH. Install Claude Code first.")
-    if not (ROOT / "recruiting.db").exists():
-        sys.exit("recruiting.db not found. Run: python generate_data.py")
+    if not (ROOT / "data" / "recruiting.db").exists():
+        sys.exit("data/recruiting.db not found. Run: uv run python data/generate.py")
 
     questions = load_questions()
     if args.only:
