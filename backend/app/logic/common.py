@@ -70,10 +70,18 @@ def scope_params(principal: Principal, **extra: Any) -> dict[str, Any]:
     return {"allowed": db.id_list(principal.allowed_job_ids), **extra}
 
 
-def out_of_scope(item_id: str) -> ToolError:
+class OutOfScopeError(ToolError):
+    """A ToolError for an ID the principal may not see. The API turns it into a 404."""
+
+
+class NotAllowedError(ToolError):
+    """A ToolError for an action the principal's role does not permit. The API turns it into a 403."""
+
+
+def out_of_scope(item_id: str) -> OutOfScopeError:
     """The one error for an ID the principal may not see. Unknown IDs get the same message,
     so the error never reveals whether the ID exists."""
-    return ToolError(f"{item_id} is not in your scope")
+    return OutOfScopeError(f"{item_id} is not in your scope")
 
 
 def require_job(principal: Principal, job_id: str) -> dict[str, Any]:
