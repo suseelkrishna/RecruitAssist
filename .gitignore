@@ -1,0 +1,9 @@
+.venv/
+recruiting.db
+.env
+evals_out/
+
+# Python and pytest caches
+__pycache__/
+*.pyc
+.pytest_cache/
