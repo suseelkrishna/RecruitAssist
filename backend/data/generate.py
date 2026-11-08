@@ -29,7 +29,7 @@ from pathlib import Path
 
 SEED = 42
 DEFAULT_AS_OF = "2026-11-09T17:00:00Z"
-GENERATOR_VERSION = "1.0.0"
+GENERATOR_VERSION = "1.1.0"
 TS_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
 DATA_DIR = Path(__file__).resolve().parent
@@ -941,17 +941,20 @@ def build_tasks(apps: list[dict], as_of: datetime) -> list[dict]:
 
 
 def build_syncs(as_of: datetime) -> list[tuple]:
-    """Fourteen days of integration sync runs, one every six hours.
+    """About fourteen days of integration sync runs, one every six hours.
 
-    Interview notes has returned partial results for the last 30 hours, so it
-    is Degraded at AS_OF. Slack had one failed run nine days earlier and has
+    The newest run of each integration finishes within the hour before AS_OF,
+    so sync age alone never makes an integration Degraded. Interview notes has
+    returned partial results for the last 30 hours, so its error rate makes it
+    Degraded at AS_OF. Slack had one failed run nine days earlier and has
     been healthy since. The other integrations always succeed.
     """
     integrations = [("Greenhouse (ATS)", 3, (40, 160)), ("Google Calendar", 9, (10, 60)),
                     ("Interview notes", 14, (5, 30)), ("Email", 21, (20, 90)),
                     ("Slack", 27, (5, 40))]
     rows = []
-    start_of_window = as_of - days(14)
+    # The 56th run (k = 55) starts one hour before AS_OF, plus the integration's offset.
+    start_of_window = as_of - timedelta(hours=6 * 55 + 1)
     for name, offset_minutes, (lo, hi) in integrations:
         for k in range(56):
             started = start_of_window + timedelta(hours=6 * k, minutes=offset_minutes)
