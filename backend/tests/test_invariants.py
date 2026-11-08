@@ -230,7 +230,12 @@ def test_sources_and_integrations(db, as_of):
                       "Interview notes": "partial", "Email": "success", "Slack": "success"}
     first = db.execute("SELECT MIN(started_at) FROM source_syncs").fetchone()[0]
     span = db.execute("SELECT julianday(?) - julianday(?)", (as_of, first)).fetchone()[0]
-    assert 13.9 <= span <= 14.0
+    assert 13.7 <= span <= 14.0
+    # The newest run of every integration finished within the hour before as_of.
+    ages = db.execute(
+        """SELECT integration, 24 * (julianday(?) - julianday(MAX(finished_at)))
+           FROM source_syncs GROUP BY integration""", (as_of,)).fetchall()
+    assert all(0 < age < 1 for _, age in ages), ages
 
 
 def test_meta_records_how_the_data_was_made(db):

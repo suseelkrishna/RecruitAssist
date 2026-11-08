@@ -2,7 +2,7 @@
 # Regenerate with: uv run python evals/expected.py
 as_of: '2026-11-09T17:00:00Z'
 seed: 42
-data_hash: 2fd8b8587eff83722a74f216875ab3c24a7e32b8b4405c66e278589863f83de9
+data_hash: f72092ed6ba5d71ce3ee5d06d61d50971cd7bd6d6de661be3fe58da76f3fb090
 questions:
 - id: controls-leak
   scenario: 1
@@ -234,7 +234,7 @@ questions:
     integration_warning:
     - integration: Interview notes
       status: partial
-      started_at: '2026-11-09T11:14:00Z'
+      started_at: '2026-11-09T16:14:00Z'
       error_message: 'Partial sync: some scorecards could not be imported (upstream timeout)'
   must:
   - Lists 2 missing scorecards, 1 unanswered candidate email, and 1 offer awaiting a response.
