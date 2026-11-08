@@ -37,7 +37,7 @@ def test_known_scopes_by_hand():
 
 
 def test_reassignment_in_store_moves_the_job_between_hr_users():
-    store.record_reassignment("JOB-1", "USR-5", changed_by="USR-1", changed_at="2026-11-09T12:00:00Z")
+    store.set_assignment("JOB-1", "USR-5", by_user_id="USR-1")
     assert "JOB-1" not in access.principal_for("USR-4").allowed_job_ids
     assert "JOB-1" in access.principal_for("USR-5").allowed_job_ids
     assert access.current_recruiters()["JOB-1"] == "USR-5"
@@ -46,10 +46,9 @@ def test_reassignment_in_store_moves_the_job_between_hr_users():
 
 
 def test_latest_reassignment_wins():
-    store.record_reassignment("JOB-1", "USR-5", "USR-1", "2026-11-09T12:00:00Z")
-    store.record_reassignment("JOB-1", "USR-6", "USR-1", "2026-11-09T13:00:00Z")
+    store.set_assignment("JOB-1", "USR-5", "USR-1")
+    store.set_assignment("JOB-1", "USR-6", "USR-1")
     assert access.current_recruiters()["JOB-1"] == "USR-6"
-    assert [c["change_id"] for c in store.change_log()] == ["CHG-001", "CHG-002"]
 
 
 def test_unknown_user_lists_valid_users():

@@ -31,7 +31,12 @@ def current_recruiters() -> dict[str, str]:
     """Each job's recruiter: the seed assignment, overlaid with reassignments in the store."""
     seed = {r["job_id"]: r["recruiter_user_id"]
             for r in db.rows("SELECT job_id, recruiter_user_id FROM job_assignments")}
-    return seed | store.assignment_overrides()
+    return seed | store.get_assignment_overrides()
+
+
+def demo_users() -> list[dict[str, str]]:
+    """Every demo user for the user switcher: ID, name, and role. No emails."""
+    return db.rows("SELECT user_id, name, role FROM users ORDER BY user_id")
 
 
 def principal_for(user_id: str) -> Principal:
