@@ -1,41 +1,37 @@
-"""Check each server.py tool against its own SQL query on recruiting.db.
+"""Check each server.py tool against its own SQL query on data/recruiting.db.
 
 The reference queries are written differently from the server's on purpose
 (for example, "in stage" comes from applications.current_stage here, but from
 open stage_events in the server), so a shared mistake is less likely to hide.
 
-Run generate_data.py first if recruiting.db is missing.
+Run data/generate.py first if recruiting.db is missing. The db and as_of
+fixtures come from conftest.py.
 """
 
 from __future__ import annotations
 
-import sqlite3
 import statistics
 from datetime import datetime, timedelta
 
 import pytest
 
 import server
+from conftest import DB_PATH
 from mcp.server.mcpserver.exceptions import ToolError
 
-FMT = "%Y-%m-%d %H:%M:%S"
+FMT = "%Y-%m-%dT%H:%M:%SZ"
 
 
-@pytest.fixture(scope="session")
-def db():
-    if not server.DB_PATH.exists():
-        pytest.fail(f"{server.DB_PATH} not found. Run: python generate_data.py")
-    con = sqlite3.connect(f"{server.DB_PATH.as_uri()}?mode=ro", uri=True)
-    con.row_factory = sqlite3.Row
-    yield con
-    con.close()
+def test_server_reads_the_committed_database():
+    assert server.DB_PATH == DB_PATH.resolve()
 
 
-def job_ids(db) -> list[int]:
+def job_ids(db) -> list[str]:
+    """Every job_id, in the order the server lists jobs."""
     return [r[0] for r in db.execute("SELECT job_id FROM jobs ORDER BY job_id")]
 
 
-def expected_counts(db, job_id: int | None) -> dict[str, tuple[int, int]]:
+def expected_counts(db, job_id: str | None) -> dict[str, tuple[int, int]]:
     """{stage: (reached, in_stage)} computed without looking at exited_at."""
     where = "" if job_id is None else "WHERE a.job_id = ?"
     params = () if job_id is None else (job_id,)
@@ -52,17 +48,19 @@ def expected_counts(db, job_id: int | None) -> dict[str, tuple[int, int]]:
 
 # --- stage counts -----------------------------------------------------------
 
-@pytest.mark.parametrize("job_id", [1, 3, 8])
+@pytest.mark.parametrize("job_id", ["JOB-1", "JOB-3", "JOB-7"])
 def test_stage_counts_for_one_job(db, job_id):
     result = server.pipeline_by_job(job_id)
     expected = expected_counts(db, job_id)
 
-    job = db.execute("SELECT title, team, filled_at FROM jobs WHERE job_id = ?",
-                     (job_id,)).fetchone()
+    job = db.execute(
+        """SELECT j.title, t.name AS team, j.status
+           FROM jobs j JOIN teams t ON t.team_id = j.team_id WHERE j.job_id = ?""",
+        (job_id,)).fetchone()
     assert result["job_id"] == job_id
     assert result["title"] == job["title"]
     assert result["team"] == job["team"]
-    assert result["status"] == ("filled" if job["filled_at"] else "open")
+    assert result["status"] == job["status"]
 
     assert [s["stage"] for s in result["stages"]] == server.STAGES
     got = {s["stage"]: (s["reached"], s["in_stage"]) for s in result["stages"]}
@@ -107,7 +105,8 @@ def test_engineering_technical_to_onsite_matches_sql(db):
            FROM stage_events e
            JOIN applications a USING (application_id)
            JOIN jobs j USING (job_id)
-           WHERE j.team = 'Engineering'""").fetchone()
+           JOIN teams t USING (team_id)
+           WHERE t.name = 'Engineering'""").fetchone()
     result = server.pipeline_by_job()
     eng = [j for j in result["jobs"] if j["team"] == "Engineering"]
     got_tech = sum(next(s["reached"] for s in j["stages"] if s["stage"] == "Technical") for j in eng)
@@ -129,20 +128,12 @@ def expected_stuck(db, as_of: datetime, days: int) -> list[int]:
     return [app_id for wait, app_id in sorted(waits, reverse=True) if wait > timedelta(days=days)]
 
 
-@pytest.fixture
-def freeze_now(monkeypatch):
-    """Pin the server's clock so day counts don't depend on when tests run."""
-    def _freeze(as_of: datetime) -> None:
-        monkeypatch.setattr(server, "now_str", lambda: as_of.strftime(FMT))
-    return _freeze
-
-
-@pytest.mark.parametrize("days", [0, 7, 10, 14])
-def test_stuck_candidates_matches_sql(db, freeze_now, days):
-    as_of = datetime.now().replace(microsecond=0)
-    freeze_now(as_of)
+@pytest.mark.parametrize("days", [0, 3, 7, 14])
+def test_stuck_candidates_matches_sql(db, as_of, days):
     result = server.stuck_candidates(days)
 
+    assert result["as_of"] == as_of
+    as_of = datetime.strptime(as_of, FMT)
     assert result["days"] == days
     assert result["count"] == len(result["candidates"])
     assert [c["application_id"] for c in result["candidates"]] == expected_stuck(db, as_of, days)
@@ -151,15 +142,15 @@ def test_stuck_candidates_matches_sql(db, freeze_now, days):
     assert waits == sorted(waits, reverse=True)
     for c in result["candidates"]:
         row = db.execute(
-            """SELECT c.first_name, j.title, a.current_stage, a.status
+            """SELECT c.full_name, j.title, a.current_stage, a.status
                FROM applications a JOIN candidates c USING (candidate_id) JOIN jobs j USING (job_id)
                WHERE a.application_id = ?""", (c["application_id"],)).fetchone()
-        assert (c["first_name"], c["job_title"], c["stage"]) == (row[0], row[1], row[2])
+        assert (c["full_name"], c["job_title"], c["stage"]) == (row[0], row[1], row[2])
         assert row["status"] == "active"
         assert c["days_in_stage"] > days or c["days_in_stage"] == round(days, 1)
 
 
-def test_stuck_threshold_is_strictly_greater_than(db, freeze_now):
+def test_stuck_threshold_is_strictly_greater_than(db):
     """A candidate exactly `days` days into a stage is not stuck; one second later they are."""
     app_id, entered = db.execute(
         """SELECT a.application_id, e.entered_at
@@ -168,17 +159,16 @@ def test_stuck_threshold_is_strictly_greater_than(db, freeze_now):
            WHERE a.status = 'active' ORDER BY e.entered_at LIMIT 1""").fetchone()
     entered = datetime.strptime(entered, FMT)
 
-    def stuck_ids(as_of: datetime) -> set[int]:
-        freeze_now(as_of)
-        return {c["application_id"] for c in server.stuck_candidates(7)["candidates"]}
+    def stuck_ids(as_of: datetime) -> set[str]:
+        result = server.stuck_candidates(7, as_of.strftime(FMT))
+        return {c["application_id"] for c in result["candidates"]}
 
     assert app_id not in stuck_ids(entered + timedelta(days=7))
     assert app_id in stuck_ids(entered + timedelta(days=7, seconds=1))
 
 
-def test_stuck_candidates_excludes_closed_applications(db, freeze_now):
-    freeze_now(datetime.now() + timedelta(days=365))  # everyone open is "stuck"
-    result = server.stuck_candidates(0)
+def test_stuck_candidates_excludes_closed_applications(db):
+    result = server.stuck_candidates(0, "2030-01-01T00:00:00Z")  # everyone open is "stuck"
     active = db.execute("SELECT COUNT(*) FROM applications WHERE status = 'active'").fetchone()[0]
     assert result["count"] == active
 
@@ -191,19 +181,23 @@ def test_stuck_candidates_rejects_negative_days():
 # --- time_to_fill -----------------------------------------------------------
 
 def expected_fill(db, team: str | None) -> dict:
-    rows = db.execute("SELECT team, opened_at, filled_at FROM jobs").fetchall()
+    """Time-to-fill stats for a team (or all teams), computed in Python from raw rows."""
+    rows = db.execute(
+        """SELECT t.name AS team, j.status, j.opened_at, j.closed_at
+           FROM jobs j JOIN teams t ON t.team_id = j.team_id""").fetchall()
     rows = [r for r in rows if team is None or r["team"] == team]
-    days = [(datetime.strptime(r["filled_at"], FMT) - datetime.strptime(r["opened_at"], FMT))
-            .total_seconds() / 86400 for r in rows if r["filled_at"]]
+    days = [(datetime.strptime(r["closed_at"], FMT) - datetime.strptime(r["opened_at"], FMT))
+            .total_seconds() / 86400 for r in rows if r["status"] == "filled"]
     return {
         "filled_jobs": len(days),
         "median_days_to_fill": round(statistics.median(days), 1) if days else None,
         "avg_days_to_fill": round(sum(days) / len(days), 1) if days else None,
-        "open_jobs": sum(1 for r in rows if r["filled_at"] is None),
+        "open_jobs": sum(1 for r in rows if r["status"] == "open"),
+        "cancelled_jobs": sum(1 for r in rows if r["status"] == "cancelled"),
     }
 
 
-@pytest.mark.parametrize("team", ["Engineering", "People", "Fab Operations"])
+@pytest.mark.parametrize("team", ["Engineering", "People", "Manufacturing"])
 def test_time_to_fill_for_one_team(db, team):
     assert server.time_to_fill(team) == {"team": team, **expected_fill(db, team)}
 
@@ -215,7 +209,7 @@ def test_time_to_fill_team_is_case_insensitive(db):
 def test_time_to_fill_overall_and_by_team(db):
     result = server.time_to_fill()
     assert result["overall"] == expected_fill(db, None)
-    teams = [r[0] for r in db.execute("SELECT DISTINCT team FROM jobs ORDER BY team")]
+    teams = [r[0] for r in db.execute("SELECT name FROM teams ORDER BY name")]
     assert [t["team"] for t in result["by_team"]] == teams
     for t in result["by_team"]:
         assert t == {"team": t["team"], **expected_fill(db, t["team"])}
@@ -223,15 +217,15 @@ def test_time_to_fill_overall_and_by_team(db):
 
 # --- errors -----------------------------------------------------------------
 
-@pytest.mark.parametrize("bad_id", [0, 99, -1])
+@pytest.mark.parametrize("bad_id", ["JOB-0", "JOB-99", "1"])
 def test_unknown_job_id(db, bad_id):
-    with pytest.raises(ToolError, match=rf"Unknown job_id {bad_id}\. Valid job_ids: 1, 2"):
+    with pytest.raises(ToolError, match=rf"Unknown job_id '{bad_id}'\. Valid job_ids: JOB-1, JOB-2"):
         server.pipeline_by_job(bad_id)
 
 
 @pytest.mark.parametrize("bad_team", ["Marketing", "", "Engineering'; DROP TABLE jobs; --"])
 def test_unknown_team(db, bad_team):
-    with pytest.raises(ToolError, match="Unknown team .* Valid teams: Business Development"):
+    with pytest.raises(ToolError, match="Unknown team .* Valid teams: Engineering, Manufacturing"):
         server.time_to_fill(bad_team)
     # The odd input above did nothing to the data.
-    assert db.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 8
+    assert db.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 7

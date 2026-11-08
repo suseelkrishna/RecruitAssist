@@ -1,7 +1,9 @@
 """recruiting-pipeline: an MCP server for questions about the recruiting funnel.
 
-It reads recruiting.db (built by generate_data.py) strictly read-only and
+It reads data/recruiting.db (built by data/generate.py) strictly read-only and
 offers three tools: pipeline_by_job, stuck_candidates and time_to_fill.
+Day counts are measured from the as_of time stored in the database's meta
+table, so answers do not change with the wall clock.
 
 Note: this uses mcp 2.x, where the SDK's FastMCP class is called MCPServer
 (same decorator API). Runs over stdio:
@@ -17,7 +19,6 @@ import os
 import sqlite3
 import statistics
 from contextlib import closing
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -27,7 +28,8 @@ from mcp.types import ToolAnnotations
 
 STAGES = ["Applied", "Recruiter Screen", "Technical", "Onsite", "Offer", "Hired"]
 
-DB_PATH = Path(os.environ.get("RECRUITING_DB", Path(__file__).with_name("recruiting.db"))).resolve()
+DEFAULT_DB = Path(__file__).resolve().parent / "data" / "recruiting.db"
+DB_PATH = Path(os.environ.get("RECRUITING_DB", DEFAULT_DB)).resolve()
 
 READ_ONLY = ToolAnnotations(readOnlyHint=True, idempotentHint=True, openWorldHint=False)
 
@@ -46,18 +48,19 @@ def connect() -> sqlite3.Connection:
         con = sqlite3.connect(f"{DB_PATH.as_uri()}?mode=ro", uri=True)
     except sqlite3.OperationalError as exc:
         raise ToolError(
-            f"Cannot open {DB_PATH} read-only ({exc}). Run generate_data.py first."
+            f"Cannot open {DB_PATH} read-only ({exc}). Run data/generate.py first."
         ) from exc
     con.row_factory = sqlite3.Row
     return con
 
 
-def now_str() -> str:
-    # Stage times are stored as local time, so compare against local time.
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+def meta_as_of(con: sqlite3.Connection) -> str:
+    """The as_of time the data was generated for, from the meta table (UTC)."""
+    return con.execute("SELECT value FROM meta WHERE key = 'as_of'").fetchone()[0]
 
 
 def pct(part: int, whole: int) -> float | None:
+    """part / whole as a percent with one decimal, or None when whole is 0."""
     return round(100 * part / whole, 1) if whole else None
 
 
@@ -78,7 +81,7 @@ def funnel(counts: dict[str, tuple[int, int]]) -> list[dict[str, Any]]:
 
 
 @mcp.tool(annotations=READ_ONLY)
-def pipeline_by_job(job_id: int | None = None) -> dict[str, Any]:
+def pipeline_by_job(job_id: str | None = None) -> dict[str, Any]:
     """Show the hiring funnel per stage, for one job or for every job.
 
     Stages, in order: Applied, Recruiter Screen, Technical, Onsite, Offer, Hired.
@@ -89,15 +92,17 @@ def pipeline_by_job(job_id: int | None = None) -> dict[str, Any]:
         (null for Applied, or when the previous stage had nobody)
 
     Args:
-        job_id: The job to report on. Leave out to get every job plus an
-            all-jobs total.
+        job_id: The job to report on, such as "JOB-2". Leave out to get every
+            job plus an all-jobs total.
     """
     with closing(connect()) as con:
         jobs = {r["job_id"]: r for r in con.execute(
-            "SELECT job_id, title, team, filled_at FROM jobs ORDER BY job_id")}
+            """SELECT j.job_id, j.title, t.name AS team, j.status
+               FROM jobs j JOIN teams t ON t.team_id = j.team_id
+               ORDER BY j.job_id""")}
         if job_id is not None and job_id not in jobs:
             raise ToolError(
-                f"Unknown job_id {job_id}. Valid job_ids: {', '.join(map(str, jobs))}.")
+                f"Unknown job_id {job_id!r}. Valid job_ids: {', '.join(jobs)}.")
 
         rows = con.execute(
             """
@@ -125,7 +130,7 @@ def pipeline_by_job(job_id: int | None = None) -> dict[str, Any]:
         "job_id": jid,
         "title": jobs[jid]["title"],
         "team": jobs[jid]["team"],
-        "status": "filled" if jobs[jid]["filled_at"] else "open",
+        "status": jobs[jid]["status"],
         "stages": funnel(per_job.get(jid, {})),
     } for jid in ids]
 
@@ -138,25 +143,27 @@ def pipeline_by_job(job_id: int | None = None) -> dict[str, Any]:
 
 
 @mcp.tool(annotations=READ_ONLY)
-def stuck_candidates(days: int = 7) -> dict[str, Any]:
+def stuck_candidates(days: int = 7, as_of: str | None = None) -> dict[str, Any]:
     """List active applications that have sat in their current stage too long.
 
     Returns applications with status 'active' whose current stage was entered
-    more than `days` days ago, longest wait first. Each row has candidate_id,
-    first_name, application_id, job_id, job_title, stage and days_in_stage
-    (one decimal).
+    more than `days` days before `as_of`, longest wait first. Each row has
+    candidate_id, full_name, application_id, job_id, job_title, stage and
+    days_in_stage (one decimal).
 
     Args:
         days: Minimum number of days in the current stage (default 7).
             Must be 0 or more.
+        as_of: UTC time to measure from, as YYYY-MM-DDTHH:MM:SSZ. Leave out to
+            use the time the data was generated for.
     """
     if days < 0:
         raise ToolError(f"days must be 0 or more, got {days}.")
-    as_of = now_str()
     with closing(connect()) as con:
+        as_of = as_of or meta_as_of(con)
         rows = con.execute(
             """
-            SELECT c.candidate_id, c.first_name, a.application_id,
+            SELECT c.candidate_id, c.full_name, a.application_id,
                    j.job_id, j.title AS job_title, a.current_stage AS stage,
                    julianday(:as_of) - julianday(e.entered_at) AS age
             FROM applications a
@@ -180,12 +187,14 @@ def stuck_candidates(days: int = 7) -> dict[str, Any]:
     return {"days": days, "as_of": as_of, "count": len(candidates), "candidates": candidates}
 
 
-def fill_stats(fill_days: list[float], open_jobs: int) -> dict[str, Any]:
+def fill_stats(fill_days: list[float], open_jobs: int, cancelled_jobs: int) -> dict[str, Any]:
+    """Count, median, and average days to fill, plus open and cancelled job counts."""
     return {
         "filled_jobs": len(fill_days),
         "median_days_to_fill": round(statistics.median(fill_days), 1) if fill_days else None,
         "avg_days_to_fill": round(statistics.fmean(fill_days), 1) if fill_days else None,
         "open_jobs": open_jobs,
+        "cancelled_jobs": cancelled_jobs,
     }
 
 
@@ -193,18 +202,18 @@ def fill_stats(fill_days: list[float], open_jobs: int) -> dict[str, Any]:
 def time_to_fill(team: str | None = None) -> dict[str, Any]:
     """Report how long filled jobs took to fill, and how many jobs are still open.
 
-    Days to fill = filled_at - opened_at, for jobs that have been filled.
+    Days to fill = closed_at - opened_at, for jobs with status 'filled'.
+    Cancelled jobs are counted separately and never count toward time to fill.
     Median and average are rounded to one decimal and are null when no job has
     been filled yet.
 
     Args:
-        team: Limit to one team, e.g. "Engineering", "Fab Operations",
-            "People" or "Business Development" (case-insensitive). Leave out to
-            get the overall numbers plus a per-team breakdown.
+        team: Limit to one team, e.g. "Engineering", "Manufacturing",
+            "People" or "Operations" (case-insensitive). Leave out to get the
+            overall numbers plus a per-team breakdown.
     """
     with closing(connect()) as con:
-        teams = [r["team"] for r in con.execute(
-            "SELECT DISTINCT team FROM jobs ORDER BY team")]
+        teams = [r["name"] for r in con.execute("SELECT name FROM teams ORDER BY name")]
         if team is not None:
             match = next((t for t in teams if t.lower() == team.strip().lower()), None)
             if match is None:
@@ -213,30 +222,34 @@ def time_to_fill(team: str | None = None) -> dict[str, Any]:
 
         rows = con.execute(
             """
-            SELECT team,
-                   CASE WHEN filled_at IS NOT NULL
-                        THEN julianday(filled_at) - julianday(opened_at) END AS fill_days
-            FROM jobs
-            WHERE (:team IS NULL OR team = :team)
+            SELECT t.name AS team, j.status,
+                   CASE WHEN j.status = 'filled'
+                        THEN julianday(j.closed_at) - julianday(j.opened_at) END AS fill_days
+            FROM jobs j JOIN teams t ON t.team_id = j.team_id
+            WHERE (:team IS NULL OR t.name = :team)
             """,
             {"team": team},
         ).fetchall()
 
     fill_days: dict[str, list[float]] = {t: [] for t in teams}
     open_jobs: dict[str, int] = {t: 0 for t in teams}
+    cancelled_jobs: dict[str, int] = {t: 0 for t in teams}
     for r in rows:
-        if r["fill_days"] is None:
+        if r["status"] == "filled":
+            fill_days[r["team"]].append(r["fill_days"])
+        elif r["status"] == "open":
             open_jobs[r["team"]] += 1
         else:
-            fill_days[r["team"]].append(r["fill_days"])
+            cancelled_jobs[r["team"]] += 1
 
     if team is not None:
-        return {"team": team, **fill_stats(fill_days[team], open_jobs[team])}
+        return {"team": team, **fill_stats(fill_days[team], open_jobs[team], cancelled_jobs[team])}
 
     return {
         "overall": fill_stats([d for ds in fill_days.values() for d in ds],
-                              sum(open_jobs.values())),
-        "by_team": [{"team": t, **fill_stats(fill_days[t], open_jobs[t])} for t in teams],
+                              sum(open_jobs.values()), sum(cancelled_jobs.values())),
+        "by_team": [{"team": t, **fill_stats(fill_days[t], open_jobs[t], cancelled_jobs[t])}
+                    for t in teams],
     }
 
 

@@ -1,7 +1,10 @@
 .venv/
-recruiting.db
-.env
 evals_out/
+
+# Secrets. Only the example file is committed.
+.env
+.env.*
+!.env.example
 
 # Python and pytest caches
 __pycache__/
