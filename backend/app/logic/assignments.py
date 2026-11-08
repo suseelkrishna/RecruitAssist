@@ -17,7 +17,12 @@ from mcp.server.mcpserver.exceptions import ToolError
 from app import db, store
 from app.access import Principal, current_recruiters
 from app.logic.common import NotAllowedError, require_job
+from app.logic.funnel import stage_counts, stage_events
 from app.logic.scope import list_jobs
+from app.logic.scoring import MAX_TOP_N, score_candidates
+from app.logic.tasks import pending_tasks
+
+REASON_MAX = 300
 
 
 def recruiters() -> list[dict[str, Any]]:
@@ -37,25 +42,39 @@ def can_reassign(principal: Principal, team_id: str) -> bool:
 
 def job_detail(principal: Principal, job_id: str, as_of: str | None = None) -> dict[str, Any]:
     """One in-scope job with its recruiter, must-haves, whether the principal may reassign it,
-    and the recruiters it may be reassigned to."""
+    the recruiters it may be reassigned to, and the job's funnel, ranked candidates, top 3,
+    and open tasks, so the job page needs a single request."""
     job = require_job(principal, job_id)
+    ranked = score_candidates(principal, job_id, top_n=MAX_TOP_N, as_of=as_of)
     listed = next(j for j in list_jobs(principal, as_of)["jobs"] if j["job_id"] == job_id)
     allowed = can_reassign(principal, job["team_id"])
     options = [r for r in recruiters() if r["user_id"] != listed["recruiter_user_id"]] if allowed else []
     return {
         **listed,
         "hiring_manager": job["hiring_manager"],
+        "over_target": listed["status"] == "open" and listed["days_open"] > listed["target_fill_days"],
         "must_haves": json.loads(job["must_have_json"]),
         "nice_to_haves": json.loads(job["nice_to_have_json"]),
         "can_reassign": allowed,
         "reassign_options": options,
+        "funnel": stage_counts(stage_events(principal, [job_id], ranked["as_of"])),
+        "candidates": [{k: c[k] for k in ("rank", "application_id", "full_name", "current_stage", "score",
+                                          "incomplete_evidence")} for c in ranked["ranked"]],
+        "candidate_pool": ranked["pool_size"],
+        "top_3": ranked["ranked"][:3],
+        "rubric_weights": ranked["weights"],
+        "tasks": pending_tasks(principal, job_id=job_id, as_of=as_of)["tasks"],
     }
 
 
-def reassign(principal: Principal, job_id: str, recruiter_user_id: str) -> dict[str, Any]:
-    """Give the job to another recruiter, log who changed it and from whom to whom, and
-    return the updated job detail."""
+def reassign(principal: Principal, job_id: str, recruiter_user_id: str,
+             reason: str | None = None) -> dict[str, Any]:
+    """Give the job to another recruiter, log who changed it, from whom to whom, and the
+    optional reason, and return the updated job detail."""
     job = require_job(principal, job_id)
+    reason = (reason or "").strip() or None
+    if reason is not None and len(reason) > REASON_MAX:
+        raise ToolError(f"The reason can be at most {REASON_MAX} characters, got {len(reason)}.")
     if not can_reassign(principal, job["team_id"]):
         raise NotAllowedError(f"Your role cannot reassign {job_id}. admin can reassign any job; "
                               "an HR Manager can reassign jobs on their own teams.")
@@ -67,5 +86,6 @@ def reassign(principal: Principal, job_id: str, recruiter_user_id: str) -> dict[
         raise ToolError(f"{job_id} is already assigned to {recruiter_user_id}.")
     store.set_assignment(job_id, recruiter_user_id, principal.user_id)
     store.append_change({"type": "reassignment", "job_id": job_id, "user_id": principal.user_id,
-                         "from_recruiter_user_id": previous, "to_recruiter_user_id": recruiter_user_id})
+                         "from_recruiter_user_id": previous, "to_recruiter_user_id": recruiter_user_id,
+                         "reason": reason})
     return job_detail(principal, job_id)

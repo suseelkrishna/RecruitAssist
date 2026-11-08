@@ -262,7 +262,7 @@ def test_ip_limit_falls_back_to_a_matching_recording(client, recorded):
     calls = len(fake.requests)
     over = ask("how many jobs can i see")
     assert over.status_code == 200 and over.json()["source"] == "recording"
-    assert over.json()["answer"] == "Recorded: 3 jobs."
+    assert over.json()["answer"] == "Recorded: 3 jobs." and over.json()["recording_reason"] == "live_limit"
     assert len(fake.requests) == calls
     unrecorded = ask("Which tasks are overdue?")
     assert unrecorded.status_code == 429 and "limit" in unrecorded.json()["error"]

@@ -53,6 +53,7 @@ class AssignmentBody(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     recruiter_user_id: str = Field(pattern=r"^USR-\d+$")
+    reason: str | None = Field(default=None, max_length=assignments.REASON_MAX)
 
 
 class HistoryItem(BaseModel):
@@ -148,9 +149,10 @@ def users() -> dict[str, Any]:
 @app.get("/api/me")
 def me(user: User) -> dict[str, Any]:
     """Who the current demo user is and their scope card."""
+    card = scope.scope_card(user)
     return {"user": {"user_id": user.user_id, "name": user.name, "role": user.role},
             "allowed_job_ids": sorted(user.allowed_job_ids), "team_ids": sorted(user.team_ids),
-            "scope": scope.scope_card(user)}
+            "summary": scope.scope_summary(card), "scope": card}
 
 
 @app.get("/api/dashboard")
@@ -159,16 +161,17 @@ def dashboard(user: User,
               job: Annotated[str | None, Query(pattern=r"^JOB-\d+$")] = None,
               recruiter: Annotated[str | None, Query(pattern=r"^USR-\d+$")] = None,
               date_from: Annotated[str | None, Query(alias="from", pattern=DateParam)] = None,
-              date_to: Annotated[str | None, Query(alias="to", pattern=DateParam)] = None) -> dict[str, Any]:
-    """Every dashboard metric for the filters, in one response."""
-    return analytics.dashboard(user, team_id=team, job_id=job, recruiter_user_id=recruiter,
+              date_to: Annotated[str | None, Query(alias="to", pattern=DateParam)] = None,
+              days: Annotated[int | None, Query()] = None) -> dict[str, Any]:
+    """Every dashboard metric for the filters, in one response. days is 30, 90, or 180."""
+    return analytics.dashboard(user, days=days, team_id=team, job_id=job, recruiter_user_id=recruiter,
                                date_from=date_from, date_to=date_to)
 
 
 @app.get("/api/jobs")
 def jobs(user: User) -> dict[str, Any]:
-    """The jobs in the user's scope."""
-    return scope.list_jobs(user)
+    """The jobs in the user's scope, with the columns and filter choices of the jobs page."""
+    return scope.job_board(user)
 
 
 @app.get("/api/jobs/{job_id}")
@@ -180,7 +183,7 @@ def job(user: User, job_id: JobId) -> dict[str, Any]:
 @app.post("/api/jobs/{job_id}/assignment")
 def reassign(user: User, job_id: JobId, body: AssignmentBody) -> dict[str, Any]:
     """Reassign the job's recruiter, record the change, and return the updated job."""
-    return assignments.reassign(user, job_id, body.recruiter_user_id)
+    return assignments.reassign(user, job_id, body.recruiter_user_id, body.reason)
 
 
 @app.get("/api/tasks")
@@ -241,6 +244,8 @@ async def ask(user: User, body: AskBody, request: Request,
             result = None
     if result is None:
         result = recordings.find(body.question, user.user_id, body.job_id, sorted(user.allowed_job_ids))
+        if result is not None:
+            result["recording_reason"] = "live_limit" if limited else "live_unavailable"
     if result is None:
         if limited:
             return error(429, "You have reached the limit for live answers. Try again later, or ask one "
