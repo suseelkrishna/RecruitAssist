@@ -1,4 +1,4 @@
-"""Deterministic grading of one agent answer against the checks in questions.yaml.
+"""Deterministic grading of one agent answer against the checks in questions.json.
 
 The grader reads the database itself (read-only, its own SQL) to decide whether
 a cited record exists and which job it belongs to, so it does not rely on the

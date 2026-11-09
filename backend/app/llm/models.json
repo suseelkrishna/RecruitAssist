@@ -1,0 +1,96 @@
+{
+  "models": {
+    "claude-haiku-5-5": {
+      "provider": "anthropic",
+      "production": true,
+      "eval": true,
+      "prices": {
+        "input": 0.1,
+        "output": 0.5,
+        "cache_write": 0.125,
+        "cache_read": 0.01
+      },
+      "confirm": false,
+      "price_source": "Anthropic list prices, as used for the Claude-only eval run of 2026-11-09."
+    },
+    "claude-sonnet-5-5": {
+      "provider": "anthropic",
+      "production": true,
+      "eval": true,
+      "prices": {
+        "input": 2.0,
+        "output": 10.0,
+        "cache_write": 2.5,
+        "cache_read": 0.2
+      },
+      "confirm": false,
+      "price_source": "Anthropic list prices, as used for the Claude-only eval run of 2026-11-09."
+    },
+    "claude-opus-5-5": {
+      "provider": "anthropic",
+      "production": true,
+      "eval": true,
+      "prices": {
+        "input": 4.0,
+        "output": 20.0,
+        "cache_write": 5.0,
+        "cache_read": 0.2
+      },
+      "confirm": false,
+      "price_source": "Anthropic list prices, as used for the Claude-only eval run of 2026-11-09."
+    },
+    "gpt-6-luna": {
+      "provider": "openai",
+      "production": false,
+      "eval": true,
+      "prices": {
+        "input": 0.1,
+        "output": 0.5,
+        "cache_write": 0.1,
+        "cache_read": 0.01
+      },
+      "confirm": true,
+      "price_source": "benchlm.ai and apievangelist.com, read 2026-11-09. Confirm at openai.com/api/pricing."
+    },
+    "gpt-6.1-terra": {
+      "provider": "openai",
+      "production": false,
+      "eval": true,
+      "prices": {
+        "input": 1.0,
+        "output": 5.0,
+        "cache_write": 1.0,
+        "cache_read": 0.05
+      },
+      "confirm": true,
+      "price_source": "benchlm.ai and apievangelist.com, read 2026-11-09. Confirm at openai.com/api/pricing."
+    },
+    "gpt-6.1-sol": {
+      "provider": "openai",
+      "production": false,
+      "eval": true,
+      "prices": {
+        "input": 2.0,
+        "output": 10.0,
+        "cache_write": 2.0,
+        "cache_read": 0.1
+      },
+      "confirm": true,
+      "price_source": "benchlm.ai and apievangelist.com, read 2026-11-09. Confirm at openai.com/api/pricing."
+    },
+    "gpt-6-astra": {
+      "provider": "openai",
+      "production": false,
+      "eval": false,
+      "prices": {
+        "input": 10.0,
+        "output": 50.0,
+        "cache_write": 10.0,
+        "cache_read": 1.0
+      },
+      "confirm": true,
+      "price_source": "benchlm.ai and apievangelist.com, read 2026-11-09. Confirm at openai.com/api/pricing.",
+      "skip_reason": "Not run, on cost. At $10 in and $50 out per million tokens it costs about 2.5 times Opus 5.5 and 100 times Haiku 5.5, and the full matrix would add roughly $30. It could not change the decision: the default rule picks the cheapest setting within 5 points of the best verified pass rate, so the most expensive model only wins by beating every cheaper one by more than 5 points, and OpenAI models are for evals only, so it would not ship either way."
+    }
+  }
+}

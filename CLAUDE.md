@@ -37,9 +37,9 @@ backend/                      FastAPI + Python 3.12 + uv (Vercel project 2)
   app/agent/prompt.py         frozen system prompt
   app/agent/verify.py         number, citation, ranking, and PII checks
   app/agent/cli.py            python -m app.agent.cli "question"
-  app/llm/                    the LLM interface: Anthropic and OpenAI adapters, models.yaml (providers and prices)
+  app/llm/                    the LLM interface: Anthropic and OpenAI adapters, models.json (providers and prices)
   data/                       generate.py, schema.sql, recruiting.db (committed), recordings.json
-  evals/                      expected.py, questions.yaml, run.py, grade.py, judge.py, judge_rubric.md,
+  evals/                      expected.py, questions.json, run.py, grade.py, judge.py, judge_rubric.md,
                               report.py, results.md, scoreboard.json (raw runs go to evals_out/, ignored)
   tests/
 README.md

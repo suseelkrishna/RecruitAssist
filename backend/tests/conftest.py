@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 
 import pytest
-import yaml
 
 import tiny
 from app import db as app_db
 from app import store
 
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "recruiting.db"
-QUESTIONS = Path(__file__).resolve().parent.parent / "evals" / "questions.yaml"
+QUESTIONS = Path(__file__).resolve().parent.parent / "evals" / "questions.json"
 
 
 @pytest.fixture(scope="session")
@@ -36,7 +36,7 @@ def as_of(db) -> str:
 @pytest.fixture(scope="session")
 def answers() -> dict:
     """Expected answers by question id, computed by SQL in evals/expected.py."""
-    return {q["id"]: q["expected"] for q in yaml.safe_load(QUESTIONS.read_text())["questions"]}
+    return {q["id"]: q["expected"] for q in json.loads(QUESTIONS.read_text())["questions"]}
 
 
 @pytest.fixture(autouse=True)

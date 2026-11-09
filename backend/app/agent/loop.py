@@ -42,7 +42,7 @@ MAX_HISTORY_ANSWER_CHARS = 1500
 MAX_TOKENS = 16000
 
 # The Anthropic request details (cache breakpoints, adaptive thinking, the refusal fallback beta)
-# live in app/llm/anthropic_client.py; list prices live in app/llm/models.yaml.
+# live in app/llm/anthropic_client.py; list prices live in app/llm/models.json.
 FALLBACK_BETA = anthropic_client.FALLBACK_BETA
 
 REFUSAL_TEXT = ("I can't help with that request. I can answer questions about the jobs, candidates, "
@@ -52,7 +52,7 @@ ROUND_LIMIT_TEXT = ("I could not finish this answer within the tool-call limit. 
 
 
 def model_name() -> str:
-    """The model to use: ANTHROPIC_MODEL, or the default. Any ID in app/llm/models.yaml works."""
+    """The model to use: ANTHROPIC_MODEL, or the default. Any ID in app/llm/models.json works."""
     return os.environ.get("ANTHROPIC_MODEL") or DEFAULT_MODEL
 
 
@@ -241,5 +241,5 @@ def add_usage(total: dict[str, int], usage: Any) -> None:
 
 
 def estimated_cost(model: str, usage: dict[str, int]) -> float | None:
-    """Estimated US dollars for the run at the list prices in app/llm/models.yaml, or None if unpriced."""
+    """Estimated US dollars for the run at the list prices in app/llm/models.json, or None if unpriced."""
     return llm.estimated_cost(model, usage)

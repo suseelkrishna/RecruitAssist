@@ -1,6 +1,6 @@
 """Run the eval questions through the agent loop for each model and effort, grade, and report.
 
-Every question in questions.yaml is asked by its demo user through
+Every question in questions.json is asked by its demo user through
 app/agent/loop.run_agent, the same loop the API uses. Each answer is graded by
 evals/grade.py, optionally scored by the LLM judge, and summarized into
 evals/results.md and evals/scoreboard.json. Raw results, which hold full answers,
@@ -9,7 +9,7 @@ are written to evals_out/ (ignored by git).
 Usage (from backend/):
     uv run python evals/run.py --estimate                  measure one question per setting, print the projected cost
     uv run python evals/run.py                              the full matrix (every eval: true model in
-                                                            app/llm/models.yaml x 2 efforts x 3 repeats)
+                                                            app/llm/models.json x 2 efforts x 3 repeats)
     uv run python evals/run.py --models claude-haiku-5-5 gpt-6-luna      compare models across providers
     uv run python evals/run.py --models claude-haiku-5-5 --repeats 1 --questions process-top3
     uv run python evals/run.py --judge claude-sonnet-5-5   add LLM judge scores for the first repeat
@@ -36,14 +36,13 @@ from typing import Any
 BACKEND = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BACKEND))
 
-import yaml  # noqa: E402
 
 from app import access, llm, store  # noqa: E402
 from app.agent import loop, recordings  # noqa: E402
 from app.env import load_env_file  # noqa: E402
 from evals import expected, grade, judge, report  # noqa: E402
 
-QUESTIONS = BACKEND / "evals" / "questions.yaml"
+QUESTIONS = BACKEND / "evals" / "questions.json"
 SCOREBOARD = BACKEND / "evals" / "scoreboard.json"
 RESULTS = BACKEND / "evals" / "results.md"
 OUT_DIR = BACKEND / "evals_out"
@@ -66,8 +65,8 @@ RECORD_ATTEMPTS = 3
 
 
 def load_questions(only: list[str] | None = None) -> dict[str, Any]:
-    """questions.yaml, limited to the given question IDs when any are named."""
-    data = yaml.safe_load(QUESTIONS.read_text())
+    """questions.json, limited to the given question IDs when any are named."""
+    data = json.loads(QUESTIONS.read_text())
     if only:
         unknown = set(only) - {q["id"] for q in data["questions"]}
         if unknown:

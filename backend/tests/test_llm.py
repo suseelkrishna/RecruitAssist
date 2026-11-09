@@ -202,7 +202,7 @@ def test_models_resolve_to_a_provider_by_table_or_prefix():
     assert llm.provider_for("claude-haiku-5-5") == "anthropic"
     assert llm.provider_for("gpt-6.1-sol") == "openai"
     assert llm.provider_for("claude-future-9") == "anthropic" and llm.provider_for("o5-mini") == "openai"
-    with pytest.raises(ValueError, match="models.yaml"):
+    with pytest.raises(ValueError, match="models.json"):
         llm.provider_for("llama-4")
     assert llm.api_key_env("gpt-6-luna") == "OPENAI_API_KEY"
 

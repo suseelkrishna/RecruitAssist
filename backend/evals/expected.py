@@ -1,6 +1,6 @@
-"""Compute the expected answer for each eval scenario with SQL, and write questions.yaml.
+"""Compute the expected answer for each eval scenario with SQL, and write questions.json.
 
-Every number and ID in questions.yaml comes from a query in this file, run
+Every number and ID in questions.json comes from a query in this file, run
 against data/recruiting.db. The queries are written directly against the
 schema and do not use the app's logic functions, so the evals check the app
 against an independent answer key.
@@ -11,16 +11,16 @@ Usage (from backend/):
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from contextlib import closing
 import sys
 from pathlib import Path
 
-import yaml
 
 BACKEND = Path(__file__).resolve().parent.parent
 DB_PATH = BACKEND / "data" / "recruiting.db"
-OUT_PATH = BACKEND / "evals" / "questions.yaml"
+OUT_PATH = BACKEND / "evals" / "questions.json"
 
 STAGE_ORDER = ["Applied", "Recruiter Screen", "Technical", "Onsite", "Offer", "Hired"]
 
@@ -458,7 +458,7 @@ def out_of_scope_records(con: sqlite3.Connection, user_id: str, full_name: str) 
             "record_ids": [app["application_id"]] + ids(scorecards, "scorecard_id") + ids(emails, "email_id")}
 
 
-# --- Assemble questions.yaml -----------------------------------------------------
+# --- Assemble questions.json -----------------------------------------------------
 #
 # Each question names the demo user who asks it, an optional earlier exchange
 # (history) for follow-ups, the SQL-computed answer key (expected), what a good
@@ -754,27 +754,19 @@ def build_questions(con: sqlite3.Connection) -> dict:
     }
 
 
-class PlainDumper(yaml.SafeDumper):
-    """A YAML dumper that writes repeated values in full instead of as &anchors."""
-
-    def ignore_aliases(self, data) -> bool:
-        return True
-
-
-def to_yaml(questions: dict) -> str:
-    """questions.yaml text: a short header followed by the questions."""
-    header = ("# Eval questions with expected answers computed by SQL in evals/expected.py.\n"
-              "# Regenerate with: uv run python evals/expected.py\n")
-    return header + yaml.dump(questions, Dumper=PlainDumper, sort_keys=False,
-                              allow_unicode=True, width=100)
+def to_json(questions: dict) -> str:
+    """questions.json text: a short note on where it comes from, then the questions."""
+    about = ("Eval questions with expected answers computed by SQL in evals/expected.py. "
+             "Regenerate with: uv run python evals/expected.py")
+    return json.dumps({"about": about, **questions}, indent=2, ensure_ascii=False) + "\n"
 
 
 def main() -> None:
-    """Write questions.yaml from the database given on the command line, or the default."""
+    """Write questions.json from the database given on the command line, or the default."""
     db = Path(sys.argv[1]) if len(sys.argv) > 1 else DB_PATH
     with closing(connect(db)) as con:
         questions = build_questions(con)
-    OUT_PATH.write_text(to_yaml(questions))
+    OUT_PATH.write_text(to_json(questions))
     print(f"Wrote {OUT_PATH} ({len(questions['questions'])} questions, as of {questions['as_of']})")
 
 
