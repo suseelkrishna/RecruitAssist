@@ -11,6 +11,8 @@ import type { DashboardResponse } from "@/lib/types";
 
 export function OfferAcceptanceChart({ data }: { data: DashboardResponse }) {
   const { offer_acceptance: metric } = data;
+  /** "Hollis Bellweather (APP-068), ..." for a list of application IDs. */
+  const named = (ids: string[]) => ids.map((id) => (metric.names[id] ? `${metric.names[id]} (${id})` : id)).join(", ");
   const outcomes: [string, string[]][] = [
     ["Accepted", metric.accepted],
     ["Declined", metric.declined],
@@ -24,7 +26,7 @@ export function OfferAcceptanceChart({ data }: { data: DashboardResponse }) {
       takeaway={metric.takeaway}
       question="How many offers have been accepted, declined, or are still pending?"
       empty={metric.offers === 0}
-      table={{ columns: ["Outcome", "Applications"], rows: outcomes.map(([label, ids]) => [label, ids.join(", ") || "None"]) }}
+      table={{ columns: ["Outcome", "Candidates"], rows: outcomes.map(([label, ids]) => [label, named(ids) || "None"]) }}
     >
       {metric.acceptance_rate_pct === null ? (
         <p className="muted">No offers have been decided yet.</p>
@@ -35,7 +37,7 @@ export function OfferAcceptanceChart({ data }: { data: DashboardResponse }) {
         {outcomes.map(([label, ids]) => (
           <div key={label} style={{ display: "contents" }}>
             <dt>{label}</dt>
-            <dd className="mono">{ids.join(", ") || "None"}</dd>
+            <dd>{named(ids) || "None"}</dd>
           </div>
         ))}
       </dl>

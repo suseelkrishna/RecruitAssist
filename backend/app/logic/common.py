@@ -34,6 +34,12 @@ def format_ts(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).strftime(FMT)
 
 
+def readable_date(day: str) -> str:
+    """A YYYY-MM-DD date (or a UTC timestamp) written for people, such as "Nov 2, 2026"."""
+    dt = datetime.strptime(day[:10], "%Y-%m-%d")
+    return f"{dt:%b} {dt.day}, {dt.year}"
+
+
 def days_between(start: str, end: str) -> float:
     """Days from start to end as a float (negative when end is earlier)."""
     return (parse_ts(end) - parse_ts(start)).total_seconds() / 86400

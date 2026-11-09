@@ -7,8 +7,10 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-/** The current filter values by name, and a function that sets one and updates the URL. */
-export function useQueryFilters<K extends string>(names: readonly K[]): [Record<K, string>, (name: K, value: string) => void] {
+/** The current filter values by name, a function that sets one, and one that clears them all. */
+export function useQueryFilters<K extends string>(
+  names: readonly K[],
+): [Record<K, string>, (name: K, value: string) => void, () => void] {
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -22,5 +24,13 @@ export function useQueryFilters<K extends string>(names: readonly K[]): [Record<
     router.replace(text ? `${pathname}?${text}` : pathname, { scroll: false });
   }
 
-  return [values, set];
+  /** Remove every filter this page owns from the URL, keeping any other query values. */
+  function clear() {
+    const next = new URLSearchParams(params.toString());
+    for (const name of names) next.delete(name);
+    const text = next.toString();
+    router.replace(text ? `${pathname}?${text}` : pathname, { scroll: false });
+  }
+
+  return [values, set, clear];
 }

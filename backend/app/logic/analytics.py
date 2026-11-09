@@ -19,7 +19,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from app import db
 from app.access import Principal, current_recruiters
 from app.logic.common import (IN_SCOPE, days_between, format_ts, median, parse_ts, pct, plural,
-                              require_job, resolve_as_of, scope_params)
+                              readable_date, require_job, resolve_as_of, scope_params)
 from app.logic.funnel import stage_counts, stage_events
 from app.logic.tasks import pending_tasks
 
@@ -170,7 +170,7 @@ def applicants_over_time(principal: Principal, by_source: bool = False, **filter
     busiest = max(totals.items(), key=lambda kv: (kv[1], kv[0]), default=None)
     takeaway = ("No applications match these filters." if busiest is None else
                 f"{plural(sum(totals.values()), 'application')} over {plural(len(totals), 'week')}; the busiest week "
-                f"started {busiest[0]} with {busiest[1]}.")
+                f"started {readable_date(busiest[0])} with {busiest[1]}.")
     return {"metric": "applicants_over_time", "as_of": as_of, "by_source": by_source,
             "weeks": weeks, "takeaway": takeaway}
 
@@ -264,9 +264,14 @@ def offer_acceptance(principal: Principal, **filters: Any) -> dict[str, Any]:
     takeaway = ("No offers match these filters." if not offers else
                 f"{len(accepted)} of {plural(len(accepted) + len(declined) + len(withdrawn), 'decided offer')} "
                 f"accepted ({rate}%), with {len(pending)} still pending.")
+    names = {r["application_id"]: r["full_name"] for r in db.rows(f"""
+        SELECT a.application_id, c.full_name FROM applications a
+        JOIN candidates c ON c.candidate_id = a.candidate_id
+        WHERE a.job_id {IN_SCOPE} AND a.application_id IN (SELECT value FROM json_each(:apps))""",
+        scope_params(principal, apps=db.id_list([a["application_id"] for a in offers])))}
     return {"metric": "offer_acceptance", "as_of": as_of, "offers": len(offers),
             "accepted": accepted, "declined": declined, "withdrawn": withdrawn, "pending": pending,
-            "acceptance_rate_pct": rate, "takeaway": takeaway}
+            "names": names, "acceptance_rate_pct": rate, "takeaway": takeaway}
 
 
 RANGE_DAYS = [30, 90, 180]

@@ -25,7 +25,6 @@ export function KpiTiles({ kpis }: { kpis: Kpis }) {
           </li>
         ))}
       </ul>
-      <p className="takeaway">{kpis.takeaway}</p>
     </section>
   );
 }

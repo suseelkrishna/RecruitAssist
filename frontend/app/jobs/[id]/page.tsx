@@ -16,24 +16,24 @@ import { AXIS, COLORS, STILL, TOOLTIP } from "@/components/charts/theme";
 import { CitationChip } from "@/components/CitationChip";
 import { JobStatus, TargetStatus, TaskStatus } from "@/components/JobStatus";
 import { Empty, ErrorState, LoadingSkeleton } from "@/components/PageStates";
-import { ReassignDialog } from "@/components/ReassignDialog";
+import { ReassignForm } from "@/components/ReassignForm";
 import { getJob } from "@/lib/api";
 import { formatDate, show } from "@/lib/format";
-import type { JobDetail, RankedCandidate } from "@/lib/types";
+import type { JobDetail, RankedCandidate, ScoreComponent } from "@/lib/types";
 import { useLoad } from "@/lib/useLoad";
 
-/** One row of the score breakdown: the component, its value from 0 to 1, and its weighted share. */
-function Component({ label, value, weighted, detail }: { label: string; value: number; weighted: number; detail: string }) {
+/** One row of the score breakdown: the component and the points it earned out of its maximum. */
+function Component({ label, part, detail }: { label: string; part: ScoreComponent; detail: string }) {
   return (
     <div>
       <div className="stage-list" style={{ display: "flex", justifyContent: "space-between" }}>
         <span>{label}</span>
-        <span className="mono">
-          {value} (adds {weighted})
+        <span>
+          {part.points} of {part.max_points} points
         </span>
       </div>
       <div className="score-bar" aria-hidden="true">
-        <span style={{ width: `${value * 100}%` }} />
+        <span style={{ width: `${part.value * 100}%` }} />
       </div>
       <p className="muted" style={{ margin: "4px 0 0", fontSize: "0.875rem" }}>
         {detail}
@@ -42,11 +42,19 @@ function Component({ label, value, weighted, detail }: { label: string; value: n
   );
 }
 
+/** How the score out of 100 is made up, with the point limits the API reports. */
+function rubricText(job: JobDetail): string {
+  const parts = job.top_3[0]?.components;
+  const limits = parts
+    ? `up to ${parts.scorecards.max_points} points for scorecards, ${parts.must_have.max_points} for must-have skills, and ${parts.stage.max_points} for the stage reached`
+    : "points for scorecards, must-have skills, and the stage reached";
+  return `Each candidate is scored out of 100: ${limits}. Must-have skills are rated by interviewers, not taken from the CV.`;
+}
+
 /** The top 3 candidates, each with scorecards, must-have match, and stage reached. */
 function TopThree({ job }: { job: JobDetail }) {
-  const w = job.rubric_weights;
   return (
-    <Card title="Top 3" description={`Score = ${w.scorecards} scorecards + ${w.must_have} must-have match + ${w.stage} stage reached. Must-have match comes from interviewer ratings, not CV text.`}>
+    <Card title="Top 3" description={rubricText(job)}>
       {job.top_3.length === 0 ? (
         <p className="muted">No active candidates to rank.</p>
       ) : (
@@ -60,27 +68,26 @@ function TopThree({ job }: { job: JobDetail }) {
                   </strong>
                   <CitationChip id={c.application_id} />
                   <span className="muted">{c.current_stage}</span>
-                  <span className="mono">Score {c.score}</span>
-                  {c.incomplete_evidence && <StatusPill tone="warning">Incomplete evidence</StatusPill>}
+                  <span>
+                    <strong>{c.score_100}</strong> out of 100
+                  </span>
+                  {c.incomplete_evidence && <StatusPill tone="warning">Scorecards missing</StatusPill>}
                 </div>
                 <Component
                   label="Scorecards"
-                  value={c.components.scorecards.value}
-                  weighted={c.components.scorecards.weighted}
+                  part={c.components.scorecards}
                   detail={`${c.components.scorecards.count} scorecards, average ${show(c.components.scorecards.avg_points)} of 4.`}
                 />
                 <Component
                   label="Must-have match"
-                  value={c.components.must_have.value}
-                  weighted={c.components.must_have.weighted}
+                  part={c.components.must_have}
                   detail={Object.entries(c.components.must_have.avg_rating_by_skill)
                     .map(([skill, rating]) => `${skill}: ${rating === null ? "not rated" : `${rating} of 4`}`)
                     .join("; ")}
                 />
                 <Component
                   label="Stage reached"
-                  value={c.components.stage.value}
-                  weighted={c.components.stage.weighted}
+                  part={c.components.stage}
                   detail={`Furthest stage: ${c.components.stage.furthest_stage}.`}
                 />
                 {c.missing.length > 0 && <p className="muted">Missing: {c.missing.join("; ")}</p>}
@@ -136,7 +143,7 @@ function JobPage({ job, onReassigned }: { job: JobDetail; onReassigned: (message
         <Card title="Recruiter">
           <p style={{ fontSize: "1.125rem", margin: "0 0 12px" }}>{job.recruiter_name ?? "Unassigned"}</p>
           {job.can_reassign ? (
-            <ReassignDialog
+            <ReassignForm
               key={job.recruiter_user_id ?? "none"}
               job={job}
               onDone={(_, message) => onReassigned(message)}
@@ -176,14 +183,14 @@ function JobPage({ job, onReassigned }: { job: JobDetail; onReassigned: (message
         ) : (
           <DataTable
             caption="Active candidates, ranked"
-            columns={["Rank", "Candidate", "Application", "Stage", "Score", "Evidence"]}
+            columns={["Rank", "Candidate", "Application", "Stage", "Score", "Scorecards"]}
             rows={job.candidates.map((c) => [
               c.rank,
               c.full_name,
               <CitationChip key="id" id={c.application_id} />,
               c.current_stage,
-              <span className="mono" key="score">{c.score}</span>,
-              c.incomplete_evidence ? <StatusPill key="ev" tone="warning">Incomplete</StatusPill> : <StatusPill key="ev" tone="success">Complete</StatusPill>,
+              <span key="score">{c.score_100} / 100</span>,
+              c.incomplete_evidence ? <StatusPill key="ev" tone="warning">Scorecards missing</StatusPill> : <StatusPill key="ev" tone="success">Scorecards in</StatusPill>,
             ])}
           />
         )}

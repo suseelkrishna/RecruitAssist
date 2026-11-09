@@ -77,7 +77,7 @@ test("an HR User gets not found for a job and a candidate outside their scope", 
 test("no demo user sends the person to the landing page", async ({ page }) => {
   await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole("heading", { name: "Pick a demo user" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Choose a demo user" })).toBeVisible();
 });
 
 for (const role of ["admin", "hr_manager", "hr_user"] as Role[]) {
@@ -122,11 +122,10 @@ test("an HR Manager reassigns a job and the change log records it", async ({ pag
   await page.goto("/jobs/JOB-2");
   const recruiterCard = page.locator("section", { has: page.getByRole("heading", { name: "Recruiter" }) });
   const before = (await recruiterCard.locator("p").first().textContent())?.trim() ?? "";
-  await page.getByRole("button", { name: "Reassign" }).click();
-  const select = page.getByLabel("New recruiter");
+  const select = page.getByLabel("Reassign to");
   const target = (await select.locator("option").first().textContent())?.trim() ?? "";
   await page.getByLabel("Reason (optional)").fill("Smoke test reassignment");
-  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Reassign" }).click();
   await expect(page.getByRole("alertdialog")).toContainText(`Reassign JOB-2 from ${before} to ${target}?`);
   await page.getByRole("button", { name: "Confirm" }).click();
   await expect(page.getByText(`JOB-2 is now assigned to ${target}.`, { exact: false })).toBeVisible();
@@ -137,4 +136,21 @@ test("an HR Manager reassigns a job and the change log records it", async ({ pag
   await expect(newest).toContainText(`JOB-2 recruiter: ${before} to ${target}`);
   await expect(newest).toContainText("Reason: Smoke test reassignment");
   await expect(newest).toContainText("Priya Raman");
+});
+
+test("dashboard filters live in the URL and Clear filters removes them", async ({ page }) => {
+  await pickUser(page, "Morgan Lee, Admin");
+  await page.getByLabel("Team").selectOption({ label: "Engineering" });
+  await expect(page).toHaveURL(/team=TEAM-1/);
+  await page.getByLabel("Applied in").selectOption("90");
+  await expect(page).toHaveURL(/days=90/);
+  await page.getByRole("button", { name: "Clear filters" }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page.getByRole("button", { name: "Clear filters" })).toHaveCount(0);
+});
+
+test("How it works opens from the landing page", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "How it works" }).click();
+  await expect(page.getByRole("dialog", { name: "How RecruitAssist works" })).toContainText("Read-only assistant");
 });

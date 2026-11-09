@@ -30,7 +30,7 @@ function matches(job: BoardJob, f: Record<(typeof FILTERS)[number], string>): bo
 }
 
 function Jobs() {
-  const [values, set] = useQueryFilters(FILTERS);
+  const [values, set, clear] = useQueryFilters(FILTERS);
   const result = useLoad(getJobs, "jobs");
 
   return (
@@ -58,6 +58,11 @@ function Jobs() {
               <Select value={values.status} onChange={(e) => set("status", e.target.value)} options={[{ label: "Open and closed", value: "" }, { label: "Open", value: "open" }, { label: "Closed", value: "closed" }]} />
             </Field>
             <Checkbox label="Over target only" checked={values.over === "1"} onCheckedChange={(c) => set("over", c === true ? "1" : "")} />
+            {FILTERS.some((f) => values[f]) && (
+              <button type="button" className="link-button filters-clear" onClick={clear}>
+                Clear filters
+              </button>
+            )}
           </div>
           {(() => {
             const rows = result.data.jobs.filter((j) => matches(j, values));
@@ -66,15 +71,24 @@ function Jobs() {
             return (
               <DataTable
                 caption="Jobs in your scope"
-                columns={["Req code", "Title", "Team", "Recruiter", "Hiring manager", "Days open / target", "Target", "Active", "Funnel", "Overdue tasks", "Status"]}
+                columns={["Job", "Recruiter", "Hiring manager", "Days open / target", "Active", "Funnel", "Overdue", "Status"]}
                 rows={rows.map((j) => [
-                  <span className="mono" key="req">{j.req_code}</span>,
-                  <Link key="title" className="ff-link" href={`/jobs/${j.job_id}`}>{j.title}</Link>,
-                  j.team,
+                  <span key="job">
+                    <Link className="ff-link" href={`/jobs/${j.job_id}`}>
+                      {j.title}
+                    </Link>
+                    <span className="cell-sub">
+                      <span className="mono">{j.req_code}</span>, {j.team}
+                    </span>
+                  </span>,
                   j.recruiter_name ?? "Unassigned",
                   j.hiring_manager,
-                  `${j.days_open} / ${j.target_fill_days}`,
-                  <TargetStatus key="target" overTarget={j.over_target} open={j.status === "open"} />,
+                  <span key="days">
+                    {j.days_open} / {j.target_fill_days}
+                    <span className="cell-sub">
+                      <TargetStatus overTarget={j.over_target} open={j.status === "open"} />
+                    </span>
+                  </span>,
                   j.active_applications,
                   <MiniFunnel key="funnel" stages={j.active_by_stage} />,
                   j.overdue_tasks,

@@ -38,16 +38,16 @@ export function ChartCard({
   const headingId = useId();
   return (
     <Card id={anchor} aria-labelledby={headingId}>
-      <div className="card-head">
-        <h2 id={headingId}>{title}</h2>
-        <div className="card-actions">
-          {!empty && <Switch label="View as table" checked={asTable} onCheckedChange={setAsTable} />}
-          <ButtonLink as={Link} href={`/ask?q=${encodeURIComponent(question)}`} variant="ghost" size="sm">
-            Ask about this
-          </ButtonLink>
-        </div>
-      </div>
+      <h2 id={headingId} className="chart-title">
+        {title}
+      </h2>
       <p className="takeaway">{takeaway}</p>
+      <div className="chart-actions">
+        {!empty && <Switch label="View as table" checked={asTable} onCheckedChange={setAsTable} />}
+        <ButtonLink as={Link} href={`/ask?q=${encodeURIComponent(question)}`} variant="ghost" size="sm">
+          Ask about this
+        </ButtonLink>
+      </div>
       {empty ? (
         <p className="muted">No data for these filters.</p>
       ) : (
