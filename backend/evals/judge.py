@@ -45,16 +45,9 @@ def parse_scores(text: str) -> dict[str, Any] | None:
 
 
 async def judge(client: Any, model: str, question: dict[str, Any], answer: str) -> dict[str, Any]:
-    """Ask the judge model for the two scores. Returns the scores (or None) and the token usage."""
-    response = await client.messages.create(
-        model=model,
-        max_tokens=4000,
-        system=RUBRIC,
-        messages=[{"role": "user", "content": judge_prompt(question, answer)}],
-        thinking={"type": "adaptive"},
-        output_config={"effort": JUDGE_EFFORT},
-    )
-    text = "".join(b.text for b in response.content if b.type == "text")
-    usage = response.usage
-    return {"scores": parse_scores(text), "model": model,
-            "usage": {"input_tokens": usage.input_tokens, "output_tokens": usage.output_tokens}}
+    """Ask the judge model for the two scores through the LLM interface (the same judge model
+    scores every setting, whichever provider answered). Returns the scores (or None) and the usage."""
+    response = await client.complete(model=model, system=RUBRIC, prompt=judge_prompt(question, answer),
+                                     effort=JUDGE_EFFORT, max_tokens=4000)
+    return {"scores": parse_scores(response.text), "model": model,
+            "usage": {"input_tokens": response.usage.input_tokens, "output_tokens": response.usage.output_tokens}}

@@ -1,0 +1,80 @@
+# Every model RecruitAssist can call, with its provider and list prices.
+#
+# Prices are US dollars per million tokens: input (uncached), output (includes any
+# reasoning or thinking tokens), cache_write, and cache_read. The evals multiply
+# these by the token counts each provider reports, so the cost columns in
+# evals/results.md are only as good as these numbers.
+#
+# confirm: true  means the price came from a third-party tracker, not the provider's
+#                own price page. CHECK IT before relying on the cost columns.
+# confirm: false means the price is the Anthropic list price the earlier Claude evals used.
+#
+# production: true   the app may use this model live (ANTHROPIC_MODEL). The default
+#                    model the evals pick is chosen only from these.
+# production: false  eval runs only. The app refuses it unless ALLOW_OPENAI_LIVE=1.
+# eval: true         included when evals/run.py runs without --models.
+# eval: false        listed in the report as not run, with skip_reason.
+
+models:
+  claude-haiku-5-5:
+    provider: anthropic
+    production: true
+    eval: true
+    prices: {input: 0.10, output: 0.50, cache_write: 0.125, cache_read: 0.01}
+    confirm: false
+    price_source: Anthropic list prices, as used for the Claude-only eval run of 2026-11-09.
+
+  claude-sonnet-5-5:
+    provider: anthropic
+    production: true
+    eval: true
+    prices: {input: 2.00, output: 10.00, cache_write: 2.50, cache_read: 0.20}
+    confirm: false
+    price_source: Anthropic list prices, as used for the Claude-only eval run of 2026-11-09.
+
+  claude-opus-5-5:
+    provider: anthropic
+    production: true
+    eval: true
+    prices: {input: 4.00, output: 20.00, cache_write: 5.00, cache_read: 0.20}
+    confirm: false
+    price_source: Anthropic list prices, as used for the Claude-only eval run of 2026-11-09.
+
+  # OpenAI does not charge extra to write the prompt cache, so cache_write equals input.
+  gpt-6-luna:
+    provider: openai
+    production: false
+    eval: true
+    prices: {input: 0.10, output: 0.50, cache_write: 0.10, cache_read: 0.01}
+    confirm: true
+    price_source: benchlm.ai and apievangelist.com, read 2026-11-09. Confirm at openai.com/api/pricing.
+
+  gpt-6.1-terra:
+    provider: openai
+    production: false
+    eval: true
+    prices: {input: 1.00, output: 5.00, cache_write: 1.00, cache_read: 0.05}
+    confirm: true
+    price_source: benchlm.ai and apievangelist.com, read 2026-11-09. Confirm at openai.com/api/pricing.
+
+  gpt-6.1-sol:
+    provider: openai
+    production: false
+    eval: true
+    prices: {input: 2.00, output: 10.00, cache_write: 2.00, cache_read: 0.10}
+    confirm: true
+    price_source: benchlm.ai and apievangelist.com, read 2026-11-09. Confirm at openai.com/api/pricing.
+
+  gpt-6-astra:
+    provider: openai
+    production: false
+    eval: false
+    prices: {input: 10.00, output: 50.00, cache_write: 10.00, cache_read: 1.00}
+    confirm: true
+    price_source: benchlm.ai and apievangelist.com, read 2026-11-09. Confirm at openai.com/api/pricing.
+    skip_reason: >-
+      Not run, on cost. At $10 in and $50 out per million tokens it costs about 2.5 times
+      Opus 5.5 and 100 times Haiku 5.5, and the full matrix would add roughly $30. It could not
+      change the decision: the default rule picks the cheapest setting within 5 points of the best
+      verified pass rate, so the most expensive model only wins by beating every cheaper one by more
+      than 5 points, and OpenAI models are for evals only, so it would not ship either way.

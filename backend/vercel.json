@@ -3,7 +3,7 @@
   "functions": {
     "app/main.py": {
       "maxDuration": 300,
-      "includeFiles": "{data/recruiting.db,data/recordings.json,evals/*.json,tests/test_*.py}",
+      "includeFiles": "{data/recruiting.db,data/recordings.json,evals/*.json,tests/test_*.py,app/llm/models.yaml}",
       "excludeFiles": "{.venv/**,evals_out/**,**/__pycache__/**,.pytest_cache/**}"
     }
   }

@@ -4,11 +4,11 @@ One call to run_agent answers one question for one principal:
   1. Set the principal for this request and open an MCP client to app/mcp_server.py over
      the in-memory transport, so tools see the principal without it being an argument.
   2. List the tools, sorted by name, so the request prefix is identical every time.
-  3. Call the Messages API: tools, then the frozen system prompt with a cache breakpoint,
-     then one user turn holding the scope card, as_of, the selected job, recent history,
-     and the question.
-  4. Run the tool calls of each round concurrently and return every result in one user
-     message, with is_error set on failures.
+  3. Call the model through the app/llm interface (Anthropic or OpenAI): tools, then the
+     frozen system prompt, then one user turn holding the scope card, as_of, the selected
+     job, recent history, and the question.
+  4. Run the tool calls of each round concurrently and return every result in one round,
+     with failures flagged as errors.
   5. Stop after MAX_ROUNDS API calls, handling every stop_reason.
   6. Verify the answer. On failure, retry once with the failures listed; if it fails
      again, the answer is marked unverified.
@@ -24,13 +24,13 @@ import os
 import time
 from typing import Any
 
-import anthropic
 from mcp import Client
 
-from app import access, mcp_server
+from app import access, llm, mcp_server
 from app.access import Principal
 from app.agent.prompt import SYSTEM_PROMPT
 from app.agent.verify import ID_RE, verify
+from app.llm import anthropic_client
 from app.logic import scope
 
 # Chosen by the evals: see evals/results.md for the scores and the rule used to pick it.
@@ -40,19 +40,10 @@ MAX_ROUNDS = 6
 MAX_HISTORY_PAIRS = 6
 MAX_HISTORY_ANSWER_CHARS = 1500
 MAX_TOKENS = 16000
-REQUEST_TIMEOUT_SECONDS = 120
-MAX_RETRIES = 3
 
-# Models that accept the server-side refusal fallback ("default" picks the substitute by category).
-FALLBACK_MODELS = {"claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5", "claude-fable-5-1"}
-FALLBACK_BETA = "server-side-fallback-2026-07-01"
-
-# US dollars per million tokens: input, output, cache write (5 minutes), cache read.
-PRICES = {
-    "claude-opus-5-5": (4.00, 20.00, 5.00, 0.20),
-    "claude-sonnet-5-5": (2.00, 10.00, 2.50, 0.20),
-    "claude-haiku-5-5": (0.10, 0.50, 0.125, 0.01),
-}
+# The Anthropic request details (cache breakpoints, adaptive thinking, the refusal fallback beta)
+# live in app/llm/anthropic_client.py; list prices live in app/llm/models.yaml.
+FALLBACK_BETA = anthropic_client.FALLBACK_BETA
 
 REFUSAL_TEXT = ("I can't help with that request. I can answer questions about the jobs, candidates, "
                 "tasks, and sources in your scope.")
@@ -61,7 +52,7 @@ ROUND_LIMIT_TEXT = ("I could not finish this answer within the tool-call limit. 
 
 
 def model_name() -> str:
-    """The model to use: ANTHROPIC_MODEL, or the default."""
+    """The model to use: ANTHROPIC_MODEL, or the default. Any ID in app/llm/models.yaml works."""
     return os.environ.get("ANTHROPIC_MODEL") or DEFAULT_MODEL
 
 
@@ -70,9 +61,10 @@ def effort_level() -> str:
     return os.environ.get("ANTHROPIC_EFFORT") or DEFAULT_EFFORT
 
 
-def make_client() -> anthropic.AsyncAnthropic:
-    """An async Messages API client with a request timeout. The SDK retries 429 and 5xx itself."""
-    return anthropic.AsyncAnthropic(timeout=REQUEST_TIMEOUT_SECONDS, max_retries=MAX_RETRIES)
+def make_client(model: str | None = None, purpose: str = "app") -> llm.LLMClient:
+    """A client for the model's provider (default: model_name()). The SDKs retry 429 and 5xx
+    themselves. For the app, an OpenAI model is refused unless ALLOW_OPENAI_LIVE=1."""
+    return llm.make_client(model or model_name(), purpose)
 
 
 async def run_agent(question: str, principal: Principal, job_id: str | None = None,
@@ -81,26 +73,26 @@ async def run_agent(question: str, principal: Principal, job_id: str | None = No
     """Answer one question for one principal and return the full, verified result.
 
     model and effort default to ANTHROPIC_MODEL and ANTHROPIC_EFFORT. The evals pass both
-    explicitly so several settings can run side by side in one process.
+    explicitly so several settings can run side by side in one process. client is an
+    llm.LLMClient; a raw Anthropic SDK client is wrapped in the Anthropic adapter.
     """
     started = time.monotonic()
     model = model or model_name()
     effort = effort or effort_level()
-    client = client or make_client()
+    client = llm.as_client(client) if client is not None else make_client(model)
     run: dict[str, Any] = {"steps": [], "outputs": [], "usage": empty_usage(), "served_by": None}
     token = access.current_principal.set(principal)
     try:
         context = scope.scope_card(principal, job_id)
         async with Client(mcp_server.mcp) as session:
             tools = await tool_specs(session)
-            messages: list[dict[str, Any]] = [
-                {"role": "user", "content": user_turn(question, context, job_id, history or [])}]
+            messages = client.user_message(user_turn(question, context, job_id, history or []))
             answer, status = await converse(client, model, effort, tools, messages, session, run)
             report = verify(answer, run["outputs"], context, question)
             retried = False
             if status == "answered" and not report["passed"]:
                 retried = True
-                messages.append({"role": "user", "content": retry_note(report)})
+                messages.extend(client.user_message(retry_note(report)))
                 answer, status = await converse(client, model, effort, tools, messages, session, run)
                 report = verify(answer, run["outputs"], context, question)
     finally:
@@ -117,6 +109,7 @@ async def run_agent(question: str, principal: Principal, job_id: str | None = No
         "latency_ms": round((time.monotonic() - started) * 1000),
         "estimated_cost_usd": estimated_cost(model, run["usage"]),
         "model": model,
+        "provider": client.provider,
         "effort": effort,
         "served_by": run["served_by"],
         "retried": retried,
@@ -128,7 +121,8 @@ async def run_agent(question: str, principal: Principal, job_id: str | None = No
 
 
 async def tool_specs(session: Client) -> list[dict[str, Any]]:
-    """The MCP tools as Messages API tool definitions, sorted by name for a stable cache prefix."""
+    """The MCP tools as neutral tool definitions {name, description, input_schema}, sorted by name
+    for a stable cache prefix. Each adapter converts them to its provider's shape."""
     listed = (await session.list_tools()).tools
     return [{"name": t.name, "description": t.description or "", "input_schema": t.input_schema}
             for t in sorted(listed, key=lambda t: t.name)]
@@ -157,64 +151,39 @@ def user_turn(question: str, context: dict[str, Any], job_id: str | None,
     return "\n\n".join(parts)
 
 
-def request(model: str, tools: list[dict[str, Any]], messages: list[dict[str, Any]],
-            effort: str = DEFAULT_EFFORT) -> dict[str, Any]:
-    """The Messages API arguments for one round.
-
-    The cache breakpoint after the system prompt caches tools and system; the top-level
-    cache_control also caches the growing conversation between rounds. Adaptive thinking
-    with an explicit effort; no sampling parameters; tool_choice stays auto.
-    """
-    params: dict[str, Any] = {
-        "model": model,
-        "max_tokens": MAX_TOKENS,
-        "system": [{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
-        "tools": tools,
-        "tool_choice": {"type": "auto"},
-        "messages": messages,
-        "thinking": {"type": "adaptive"},
-        "output_config": {"effort": effort},
-        "cache_control": {"type": "ephemeral"},
-    }
-    if model in FALLBACK_MODELS:
-        params["betas"] = [FALLBACK_BETA]
-        params["fallbacks"] = "default"
-    return params
-
-
-async def converse(client: Any, model: str, effort: str, tools: list[dict[str, Any]],
+async def converse(client: llm.LLMClient, model: str, effort: str, tools: list[dict[str, Any]],
                    messages: list[dict[str, Any]], session: Client, run: dict[str, Any]) -> tuple[str, str]:
     """Call the model and run its tools until it answers or MAX_ROUNDS calls are used.
 
     Returns the answer text and a status: answered, truncated (max_tokens), refused, or
-    round_limit. Every assistant turn is kept unchanged, thinking blocks included.
+    round_limit. Every assistant turn is kept as the provider returned it, thinking blocks included.
     """
     for _ in range(MAX_ROUNDS):
-        response = await client.beta.messages.create(**request(model, tools, messages, effort))
+        response = await client.create(model=model, system=SYSTEM_PROMPT, tools=tools, messages=messages,
+                                       effort=effort, max_tokens=MAX_TOKENS)
         add_usage(run["usage"], response.usage)
-        run["served_by"] = getattr(response, "model", model)
-        messages.append({"role": "assistant", "content": response.content})
+        run["served_by"] = response.served_by
+        messages.extend(response.messages)
         reason = response.stop_reason
         if reason == "tool_use":
-            calls = [b for b in response.content if b.type == "tool_use"]
-            ran = await asyncio.gather(*(run_tool(session, call) for call in calls))
+            ran = await asyncio.gather(*(run_tool(session, call) for call in response.tool_calls))
             for _, output, step in ran:
                 run["outputs"].append(output)
                 run["steps"].append(step)
-            messages.append({"role": "user", "content": [block for block, _, _ in ran]})
+            messages.extend(client.tool_results_message([result for result, _, _ in ran]))
         elif reason == "pause_turn":
             continue
         elif reason == "refusal":
             return REFUSAL_TEXT, "refused"
         elif reason == "max_tokens":
-            return text_of(response) + "\n\n(This answer was cut off before it finished.)", "truncated"
+            return response.text + "\n\n(This answer was cut off before it finished.)", "truncated"
         else:
-            return text_of(response), "answered"
+            return response.text, "answered"
     return ROUND_LIMIT_TEXT, "round_limit"
 
 
-async def run_tool(session: Client, call: Any) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    """Run one tool call over MCP. Returns its tool_result block, its output for the verifier,
+async def run_tool(session: Client, call: llm.ToolCall) -> tuple[llm.ToolResult, dict[str, Any], dict[str, Any]]:
+    """Run one tool call over MCP. Returns its ToolResult, its output for the verifier,
     and the step record (tool, input, rows, is_error, ms)."""
     started = time.monotonic()
     try:
@@ -229,7 +198,7 @@ async def run_tool(session: Client, call: Any) -> tuple[dict[str, Any], dict[str
             output = json.loads(text)
         except ValueError:
             pass
-    block = {"type": "tool_result", "tool_use_id": call.id, "content": text, "is_error": is_error}
+    block = llm.ToolResult(call.id, text, is_error)
     record = {"name": call.name, "input": call.input, "output": output, "is_error": is_error}
     step = {"tool": call.name, "input": call.input, "rows": 0 if is_error else row_count(output),
             "is_error": is_error, "ms": round((time.monotonic() - started) * 1000)}
@@ -244,11 +213,6 @@ def row_count(output: Any) -> int:
         return output["count"]
     lists = [v for v in output.values() if isinstance(v, list)]
     return sum(len(v) for v in lists) if lists else 1
-
-
-def text_of(response: Any) -> str:
-    """The text blocks of a response joined together."""
-    return "".join(b.text for b in response.content if b.type == "text").strip()
 
 
 def retry_note(report: dict[str, Any]) -> str:
@@ -277,10 +241,5 @@ def add_usage(total: dict[str, int], usage: Any) -> None:
 
 
 def estimated_cost(model: str, usage: dict[str, int]) -> float | None:
-    """Estimated US dollars for the run at list prices for the requested model, or None if unpriced."""
-    prices = PRICES.get(model)
-    if prices is None:
-        return None
-    tokens = (usage["input_tokens"], usage["output_tokens"],
-              usage["cache_creation_input_tokens"], usage["cache_read_input_tokens"])
-    return round(sum(n * p for n, p in zip(tokens, prices)) / 1_000_000, 6)
+    """Estimated US dollars for the run at the list prices in app/llm/models.yaml, or None if unpriced."""
+    return llm.estimated_cost(model, usage)

@@ -138,7 +138,7 @@ def test_matrix_skips_finished_runs_and_stops_on_a_fatal_error(monkeypatch, tmp_
         return {"answer": "ok", "status": "answered", "steps": [], "estimated_cost_usd": 0.0}
 
     monkeypatch.setattr(runner, "ask", fake_ask)
-    monkeypatch.setattr(runner.loop, "make_client", lambda: None)
+    monkeypatch.setattr(runner.loop, "make_client", lambda *args, **kwargs: None)
     questions = [{"id": i, "user": "USR-1", "checks": {}} for i in ("a", "b", "c")]
     done = [{"question_id": "a", "model": "m", "effort": "low", "repeat": 0, "result": {}, "grade": {}}]
     out = tmp_path / "runs.jsonl"
@@ -153,3 +153,31 @@ def test_configured_default_matches_the_scoreboard():
     from app.agent import loop
     board = json.loads((Path(expected.BACKEND) / "evals" / "scoreboard.json").read_text())
     assert board["default"] == {"model": loop.DEFAULT_MODEL, "effort": loop.DEFAULT_EFFORT}
+
+
+def test_openai_rows_are_compared_but_never_picked_as_the_default():
+    def row(model, passed, cost):
+        return {"question_id": "a", "model": model, "effort": "low", "repeat": 0,
+                "grade": {"passed": passed, "checks": {"citations": True}, "reasons": []},
+                "result": {"verified": passed, "latency_ms": 1000, "estimated_cost_usd": cost,
+                           "usage": {"api_calls": 1}}}
+    runs = [row("claude-haiku-5-5", False, 0.001), row("claude-sonnet-5-5", True, 0.02), row("gpt-6-luna", True, 0.001)]
+    board = report.scoreboard(runs, {"generated_at": "t", "as_of": "t", "data_hash": "abc", "questions": 1,
+                                     "repeats": 1}, skipped={"gpt-6-astra": "Too expensive."})
+    assert board["default"] == {"model": "claude-sonnet-5-5", "effort": "low"}
+    assert board["best_overall"] == {"model": "gpt-6-luna", "effort": "low"}
+    assert {s["model"]: s["provider"] for s in board["settings"]}["gpt-6-luna"] == "openai"
+    assert board["prices_to_confirm"] == ["gpt-6-astra", "gpt-6-luna"]
+    md = report.results_markdown(board, [{"id": "a", "user": "USR-1"}], [])
+    assert "| gpt-6-luna low | openai |" in md and "| gpt-6-astra | openai | Too expensive. |" in md
+    assert "the same rule would pick **gpt-6-luna**" in md and "## Prices to confirm" in md
+
+
+def test_estimate_refuses_to_project_from_failed_runs(capsys):
+    from evals import run as runner
+    failed = {"model": "gpt-6-luna", "effort": "low",
+              "result": {"status": "error", "error": "RateLimitError: no credits", "estimated_cost_usd": 0.0}}
+    assert runner.estimate([failed], 18, 3, None) is None
+    assert "No projection" in capsys.readouterr().out
+    ok = {"model": "gpt-6-luna", "effort": "low", "result": {"status": "answered", "estimated_cost_usd": 0.001}}
+    assert runner.estimate([ok], 18, 3, None) == pytest.approx(0.054)

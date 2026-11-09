@@ -37,6 +37,7 @@ backend/                      FastAPI + Python 3.12 + uv (Vercel project 2)
   app/agent/prompt.py         frozen system prompt
   app/agent/verify.py         number, citation, ranking, and PII checks
   app/agent/cli.py            python -m app.agent.cli "question"
+  app/llm/                    the LLM interface: Anthropic and OpenAI adapters, models.yaml (providers and prices)
   data/                       generate.py, schema.sql, recruiting.db (committed), recordings.json
   evals/                      expected.py, questions.yaml, run.py, grade.py, judge.py, judge_rubric.md,
                               report.py, results.md, scoreboard.json (raw runs go to evals_out/, ignored)
@@ -57,7 +58,7 @@ Ask follows a slightly different path: from `main.py` it goes to `agent/loop.py`
 
 ## Stack
 
-- **Backend:** Python 3.12 with `uv`, FastAPI, `mcp` 2.3.0, the `anthropic` SDK, and pytest. In `mcp` 2.3.0 the server class is `MCPServer`, formerly called `FastMCP`. Check the current SDK docs before writing SDK code; never guess signatures.
+- **Backend:** Python 3.12 with `uv`, FastAPI, `mcp` 2.3.0, the `anthropic` SDK, and pytest. The `openai` SDK is an eval-only dependency (uv group `evals`), used to compare OpenAI models; the app ships Claude only. In `mcp` 2.3.0 the server class is `MCPServer`, formerly called `FastMCP`. Check the current SDK docs before writing SDK code; never guess signatures.
 - **Frontend:** Next.js App Router with TypeScript and Recharts. It uses the `@suseelkrishna/fieryfusion-tokens` and `@suseelkrishna/fieryfusion-react` packages from GitHub Packages, with the light theme and the corporate profile.
 - **Hosting:** two Vercel Hobby projects from this repo, with Root Directory set to `frontend/` and `backend/`. The frontend rewrites `/api/*` to `BACKEND_URL`.
 - **Model:** `ANTHROPIC_MODEL`, default `claude-haiku-5-5` at effort `low` (`ANTHROPIC_EFFORT`), chosen by the evals in `backend/evals/results.md`.
@@ -72,6 +73,7 @@ cd backend && uv sync && uv run python data/generate.py && uv run pytest -q
 cd backend && uv run fastapi dev app/main.py                 # http://localhost:8000
 cd backend && uv run python -m app.agent.cli "Which tasks are pending or overdue?"
 cd backend && uv run python evals/run.py --models claude-haiku-5-5 claude-sonnet-5-5 claude-opus-5-5
+cd backend && uv run python evals/run.py --models gpt-6-luna gpt-6.1-terra gpt-6.1-sol --resume evals_out/<stamp>/runs.jsonl
 cd frontend && npm ci && npm run dev                         # http://localhost:3000, needs NPM_TOKEN for the brand kit
 claude mcp add recruitassist --scope user -- "$PWD/backend/.venv/bin/python" "$PWD/backend/app/mcp_server.py"
 ```
