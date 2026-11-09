@@ -26,6 +26,32 @@ export type MeResponse = {
   scope: { as_of: string; role: Role; jobs: ScopeJob[]; overdue_items: number };
 };
 
+export type CatchUpTile = {
+  key: "overdue_tasks" | "jobs_past_target" | "active_candidates" | "new_applicants_7d" | "offers_out";
+  label: string;
+  value: number;
+  note: string;
+};
+
+export type CatchUpTask = {
+  task_id: string | null;
+  application_id: string | null;
+  job_id: string;
+  title: string;
+  owner_name: string | null;
+  days_overdue: number;
+};
+
+export type CatchUpResponse = {
+  as_of: string;
+  first_name: string;
+  role: Role;
+  summary: string;
+  tiles: CatchUpTile[];
+  overdue_tasks: CatchUpTask[];
+  overdue_more: number;
+};
+
 export type Takeaway = { metric: string; as_of: string; takeaway: string };
 
 export type FunnelStage = {

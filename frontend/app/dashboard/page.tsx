@@ -1,12 +1,15 @@
 "use client";
 
 /**
- * The dashboard: filters, six headline numbers, and eight charts, all from one call to
- * GET /api/dashboard with the filters as query parameters. The filters live in the URL.
+ * The dashboard has two views. By default it is the catch-up view: a greeting, one line on
+ * what needs attention, and tiles that open their chart on demand. With ?view=full it is the
+ * full dashboard: filters, six headline numbers, and eight charts, all from one call to
+ * GET /api/dashboard with the filters as query parameters. Both views live in the URL.
  */
 
 import { Field, Select } from "@suseelkrishna/fieryfusion-react";
-import { notFound } from "next/navigation";
+import Link from "next/link";
+import { notFound, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { AppShell } from "@/components/AppShell";
 import { ApplicantsChart } from "@/components/charts/ApplicantsChart";
@@ -17,6 +20,7 @@ import { RecruiterLoadChart } from "@/components/charts/RecruiterLoadChart";
 import { SourceQualityChart } from "@/components/charts/SourceQualityChart";
 import { TimeInStageChart } from "@/components/charts/TimeInStageChart";
 import { WithdrawalChart } from "@/components/charts/WithdrawalChart";
+import { CatchUp } from "@/components/CatchUp";
 import { KpiTiles } from "@/components/KpiTiles";
 import { ErrorState, LoadingSkeleton } from "@/components/PageStates";
 import { getDashboard } from "@/lib/api";
@@ -64,7 +68,8 @@ function Filters({
   );
 }
 
-function Dashboard() {
+/** The full dashboard: every filter, headline number, and chart the API returns. */
+function FullDashboard() {
   const [values, set, clear] = useQueryFilters(FILTERS);
   const key = FILTERS.map((f) => values[f]).join("|");
   const result = useLoad(() => getDashboard(values), key);
@@ -75,9 +80,12 @@ function Dashboard() {
     <>
       <div className="page-head">
         <div>
-          <h1>Dashboard</h1>
+          <h1>Full dashboard</h1>
           <p>Every number here comes from the database for the jobs in your scope.</p>
         </div>
+        <Link href="/dashboard" className="link-button">
+          Back to catch-up
+        </Link>
       </div>
       <Filters data={data} values={values} set={set} clear={clear} />
       {result.state === "loading" && <LoadingSkeleton blocks={4} label="Loading the dashboard" />}
@@ -101,11 +109,17 @@ function Dashboard() {
   );
 }
 
+/** Pick the view from the URL: the full dashboard with ?view=full, the catch-up view otherwise. */
+function DashboardView() {
+  const params = useSearchParams();
+  return params.get("view") === "full" ? <FullDashboard /> : <CatchUp />;
+}
+
 export default function DashboardPage() {
   return (
     <AppShell>
       <Suspense fallback={<LoadingSkeleton blocks={4} label="Loading the dashboard" />}>
-        <Dashboard />
+        <DashboardView />
       </Suspense>
     </AppShell>
   );

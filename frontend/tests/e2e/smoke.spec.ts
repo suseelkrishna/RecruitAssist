@@ -1,7 +1,8 @@
 /**
- * Smoke tests: every demo user can open the pages their role allows, gets the not-found page
- * for the ones it does not, can ask a suggested question (against a stubbed /api/ask), and an
- * HR Manager can complete one reassignment.
+ * Smoke tests: every demo user lands on a catch-up view that greets them by first name, can
+ * open the pages their role allows, gets the not-found page for the ones it does not, can ask
+ * a suggested question (against a stubbed /api/ask), and an HR Manager can complete one
+ * reassignment.
  */
 
 import { expect, test, type Page } from "@playwright/test";
@@ -9,7 +10,7 @@ import { expect, test, type Page } from "@playwright/test";
 type Role = "admin" | "hr_manager" | "hr_user";
 
 const USERS: { id: string; label: string; role: Role }[] = [
-  { id: "USR-1", label: "Morgan Lee, Admin", role: "admin" },
+  { id: "USR-1", label: "Suseel Maddali, Admin", role: "admin" },
   { id: "USR-2", label: "Priya Raman, HR Manager", role: "hr_manager" },
   { id: "USR-3", label: "Daniel Okafor, HR Manager", role: "hr_manager" },
   { id: "USR-4", label: "Sam Rivera, HR User", role: "hr_user" },
@@ -17,14 +18,19 @@ const USERS: { id: string; label: string; role: Role }[] = [
   { id: "USR-6", label: "Jordan Patel, HR User", role: "hr_user" },
 ];
 
-const PAGES: { path: string; heading: string; roles: Role[] }[] = [
-  { path: "/dashboard", heading: "Dashboard", roles: ["admin", "hr_manager", "hr_user"] },
-  { path: "/ask", heading: "Ask", roles: ["admin", "hr_manager", "hr_user"] },
-  { path: "/jobs", heading: "Jobs", roles: ["admin", "hr_manager", "hr_user"] },
-  { path: "/tasks", heading: "Tasks", roles: ["admin", "hr_manager", "hr_user"] },
-  { path: "/sources", heading: "Sources", roles: ["admin", "hr_manager"] },
-  { path: "/changes", heading: "Changes", roles: ["admin", "hr_manager"] },
-  { path: "/quality", heading: "Quality", roles: ["admin", "hr_manager", "hr_user"] },
+/** The first name a user is greeted by on the catch-up view. */
+function firstName(label: string): string {
+  return label.split(" ")[0];
+}
+
+const PAGES: { path: string; heading: string | RegExp; nav: string; roles: Role[] }[] = [
+  { path: "/dashboard", heading: /^Hi /, nav: "Dashboard", roles: ["admin", "hr_manager", "hr_user"] },
+  { path: "/ask", heading: "Ask", nav: "Ask", roles: ["admin", "hr_manager", "hr_user"] },
+  { path: "/jobs", heading: "Jobs", nav: "Jobs", roles: ["admin", "hr_manager", "hr_user"] },
+  { path: "/tasks", heading: "Tasks", nav: "Tasks", roles: ["admin", "hr_manager", "hr_user"] },
+  { path: "/sources", heading: "Sources", nav: "Sources", roles: ["admin", "hr_manager"] },
+  { path: "/changes", heading: "Changes", nav: "Changes", roles: ["admin", "hr_manager"] },
+  { path: "/quality", heading: "Quality", nav: "Quality", roles: ["admin", "hr_manager", "hr_user"] },
 ];
 
 const CHIP: Record<Role, string> = {
@@ -38,7 +44,7 @@ async function pickUser(page: Page, label: string) {
   await page.goto("/");
   await page.getByRole("button", { name: label }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Dashboard" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: `Hi ${firstName(label)}` })).toBeVisible();
 }
 
 const NOT_FOUND = "This page is not available.";
@@ -48,7 +54,7 @@ for (const user of USERS) {
     await pickUser(page, user.label);
     const nav = page.getByRole("navigation", { name: "Main" });
     for (const p of PAGES) {
-      await expect(nav.getByRole("link", { name: p.heading, exact: true })).toHaveCount(p.roles.includes(user.role) ? 1 : 0);
+      await expect(nav.getByRole("link", { name: p.nav, exact: true })).toHaveCount(p.roles.includes(user.role) ? 1 : 0);
     }
     for (const p of PAGES) {
       const allowed = p.roles.includes(user.role);
@@ -138,14 +144,62 @@ test("an HR Manager reassigns a job and the change log records it", async ({ pag
   await expect(newest).toContainText("Priya Raman");
 });
 
+for (const user of [USERS[0], USERS[1], USERS[3]]) {
+  for (const width of [1280, 390]) {
+    test(`${user.label} at ${width}px: catch-up tiles open their detail on demand`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await pickUser(page, user.label);
+      await expect(page.getByText(/: .*\.$/).first()).toBeVisible();
+      const tiles = page.getByRole("region", { name: "What needs attention" }).getByRole("button");
+      await expect(tiles).toHaveCount(5);
+      // Nothing heavy until a tile is opened: no chart and no dashboard request yet.
+      await expect(page.getByRole("heading", { name: "Pipeline funnel" })).toHaveCount(0);
+      const tile = page.getByRole("button", { name: /Active candidates/ });
+      await tile.focus();
+      await page.keyboard.press("Enter");
+      await expect(tile).toHaveAttribute("aria-expanded", "true");
+      await expect(page.getByRole("heading", { name: "Pipeline funnel" })).toBeVisible();
+      await page.getByRole("button", { name: /Overdue tasks/ }).click();
+      await expect(page.getByRole("heading", { name: "Pipeline funnel" })).toHaveCount(0);
+      await expect(page.getByRole("link", { name: /See all tasks/ })).toBeVisible();
+      await page.getByRole("link", { name: /See all tasks/ }).focus();
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("button", { name: /Overdue tasks/ })).toBeFocused();
+      const scroll = await page.evaluate(() => document.documentElement.scrollWidth);
+      expect(scroll).toBeLessThanOrEqual(width);
+    });
+  }
+}
+
+test("View full dashboard shows every chart and leads back to catch-up", async ({ page }) => {
+  await pickUser(page, "Suseel Maddali, Admin");
+  await page.getByRole("link", { name: "View full dashboard" }).click();
+  await expect(page).toHaveURL(/\/dashboard\?view=full$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Full dashboard" })).toBeVisible();
+  for (const title of ["Pipeline funnel", "Days open vs target", "Applicants per week", "Source quality",
+    "Median time in each stage", "Withdrawals by reason", "Recruiter load", "Offer acceptance"]) {
+    await expect(page.getByRole("heading", { name: title })).toBeVisible();
+  }
+  await page.getByRole("link", { name: "Back to catch-up" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Hi Suseel" })).toBeVisible();
+});
+
+test("an HR User's full dashboard has no recruiter load chart", async ({ page }) => {
+  await pickUser(page, "Sam Rivera, HR User");
+  await page.goto("/dashboard?view=full");
+  await expect(page.getByRole("heading", { name: "Pipeline funnel" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Recruiter load" })).toHaveCount(0);
+});
+
 test("dashboard filters live in the URL and Clear filters removes them", async ({ page }) => {
-  await pickUser(page, "Morgan Lee, Admin");
+  await pickUser(page, "Suseel Maddali, Admin");
+  await page.goto("/dashboard?view=full");
   await page.getByLabel("Team").selectOption({ label: "Engineering" });
   await expect(page).toHaveURL(/team=TEAM-1/);
   await page.getByLabel("Applied in").selectOption("90");
   await expect(page).toHaveURL(/days=90/);
   await page.getByRole("button", { name: "Clear filters" }).click();
-  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page).toHaveURL(/\/dashboard\?view=full$/);
   await expect(page.getByRole("button", { name: "Clear filters" })).toHaveCount(0);
 });
 
