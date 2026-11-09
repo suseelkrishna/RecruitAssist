@@ -19,3 +19,8 @@ dev = [
 
 [tool.uv]
 package = false
+
+# Vercel loads the FastAPI app from app/main.py. Naming it here keeps the older
+# server.py at the project root from being picked as the entrypoint.
+[tool.vercel]
+entrypoint = "app.main:app"
