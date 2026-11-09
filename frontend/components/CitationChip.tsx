@@ -22,6 +22,11 @@ export function CitationChip({ id }: { id: string }) {
           </button>
         }
       >
+        <p>
+          <Link className="ff-link" href={`/candidates/${id}`}>
+            Open the full evidence page
+          </Link>
+        </p>
         <EvidenceView applicationId={id} />
       </Drawer>
     );

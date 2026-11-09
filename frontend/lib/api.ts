@@ -8,12 +8,17 @@ import { clearDemoUser, getDemoUser } from "@/lib/user";
 import type {
   AskBody,
   AskResult,
+  ChangesResponse,
   DashboardFilters,
   DashboardResponse,
   Evidence,
+  HealthResponse,
   JobDetail,
   JobsResponse,
   MeResponse,
+  QualityResponse,
+  SourcesResponse,
+  TasksResponse,
   UsersResponse,
 } from "@/lib/types";
 
@@ -107,4 +112,29 @@ export function getCandidate(applicationId: string): Promise<Evidence> {
 /** POST /api/ask: ask the assistant one question and wait for the full, checked answer. */
 export function ask(body: AskBody): Promise<AskResult> {
   return request("/api/ask", { method: "POST", body: JSON.stringify(body) });
+}
+
+/** GET /api/tasks: pending and overdue tasks, grouped for the role. */
+export function getTasks(): Promise<TasksResponse> {
+  return request("/api/tasks");
+}
+
+/** GET /api/sources: integration health and candidate source quality. Admin and HR Manager. */
+export function getSources(): Promise<SourcesResponse> {
+  return request("/api/sources");
+}
+
+/** GET /api/health: the live checks for the database, model API, and store. */
+export function getHealth(): Promise<HealthResponse> {
+  return request("/api/health");
+}
+
+/** GET /api/changes: the change log entries the user may see, newest first. */
+export function getChanges(): Promise<ChangesResponse> {
+  return request("/api/changes");
+}
+
+/** GET /api/quality: test counts, mutation score, access matrix, and the eval scoreboard. */
+export function getQuality(): Promise<QualityResponse> {
+  return request("/api/quality");
 }

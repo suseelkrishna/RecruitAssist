@@ -270,3 +270,67 @@ export type AskResult = {
 };
 
 export type AskBody = { question: string; job_id?: string };
+
+export type BoardTask = Task & { team_id: string; team: string; kind: "explicit" | "derived"; rule_text: string | null };
+
+export type TasksResponse = {
+  as_of: string;
+  count: number;
+  overdue_count: number;
+  tasks: BoardTask[];
+  rules: Record<string, string>;
+  group_by: "team" | "owner" | "none";
+  groups: { key: string; label: string; count: number; overdue_count: number; tasks: BoardTask[] }[];
+};
+
+export type Integration = {
+  integration: string;
+  status: "Healthy" | "Degraded" | "Down";
+  last_sync: string | null;
+  mode: string;
+  simulated: boolean;
+  reasons?: string[];
+  records?: number;
+  runs_24h?: number;
+  error_rate_24h_pct?: number | null;
+  last_error?: { sync_id: string; at: string; message: Untrusted } | null;
+};
+
+export type SourcesResponse = {
+  integrations_view: "full" | "summary";
+  integrations: Integration[];
+  source_quality: Takeaway & { sources: SourceRow[] };
+};
+
+export type LiveCheck = { name: string; status: "ok" | "error" | "not_configured"; [key: string]: unknown };
+
+export type HealthResponse = { status: string; checks: LiveCheck[] };
+
+export type ChangeEntry = {
+  change_id: string;
+  at: string;
+  type: "reassignment" | "ask";
+  user_id: string;
+  user_name: string | null;
+  user_role: Role | null;
+  job_id: string | null;
+  summary: string;
+  reason?: string | null;
+  question_hash?: string;
+  tools?: string[];
+  record_ids?: string[];
+  source?: string;
+  verified?: boolean;
+};
+
+export type ChangesResponse = { changes: ChangeEntry[] };
+
+export type QualityResponse = {
+  tests_defined: number;
+  tests: unknown;
+  mutation_score: unknown;
+  rbac: unknown;
+  scoreboard: unknown;
+  generated_at: string | null;
+  missing: string[];
+};
