@@ -11,8 +11,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { Footer } from "@/components/Footer";
+import { HowItWorks } from "@/components/HowItWorks";
+import { Logo } from "@/components/Logo";
 import { getMe, getUsers } from "@/lib/api";
-import { formatDateTime } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 import { navFor, ROLE_LABELS } from "@/lib/roles";
 import { useLoad } from "@/lib/useLoad";
 import { setDemoUser } from "@/lib/user";
@@ -35,8 +37,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         Skip to content
       </a>
       <nav className="shell-nav" aria-label="Main">
-        <Link href="/dashboard" className="shell-brand">
-          RecruitAssist
+        <Link href="/dashboard" className="shell-brand" aria-label="RecruitAssist dashboard">
+          <Logo size={28} withName />
         </Link>
         {role &&
           navFor(role).map((item) => (
@@ -56,17 +58,18 @@ export function AppShell({ children }: { children: ReactNode }) {
             <>
               <Badge tone="neutral">{ROLE_LABELS[me.data.user.role]}</Badge>
               <span className="topbar-name">{me.data.user.name}</span>
-              <span className="chip" title="Jobs this user may see">
-                Scope: {me.data.summary.jobs} jobs
+              <span className="tag" title="The jobs this user may see">
+                Sees {me.data.summary.jobs} {me.data.summary.jobs === 1 ? "job" : "jobs"}
               </span>
-              <span className="chip" title="The time the data describes">
-                Data as of {formatDateTime(me.data.scope.as_of)}
+              <span className="tag" title={`The data describes the pipeline as of ${me.data.scope.as_of}`}>
+                Data as of {formatDate(me.data.scope.as_of)}
               </span>
             </>
           ) : (
             <span className="muted">{me.state === "error" ? "Could not load the current user." : "Loading user"}</span>
           )}
           <span className="topbar-spacer" />
+          <HowItWorks />
           <DropdownMenu
             trigger={
               <Button variant="secondary" size="sm">

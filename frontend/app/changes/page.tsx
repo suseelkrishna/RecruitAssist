@@ -18,6 +18,7 @@ import { formatDateTime } from "@/lib/format";
 import { useQueryFilters } from "@/lib/query";
 import { ROLE_LABELS } from "@/lib/roles";
 import type { ChangeEntry } from "@/lib/types";
+import { toolName } from "@/lib/tools";
 import { useLoad } from "@/lib/useLoad";
 
 const KINDS = { All: "", Reassignments: "reassignment", Questions: "ask" } as const;
@@ -32,12 +33,17 @@ function Details({ entry }: { entry: ChangeEntry }) {
         {entry.verified ? <StatusPill tone="success">Verified</StatusPill> : <StatusPill tone="warning">Needs review</StatusPill>}{" "}
         {entry.source === "recording" && <span className="muted">Recorded answer</span>}
       </div>
-      <div className="muted">Tools: {(entry.tools ?? []).join(", ") || "None"}</div>
-      <span className="chips">
-        {(entry.record_ids ?? []).map((id) => (
-          <CitationChip key={id} id={id} />
-        ))}
-      </span>
+      <div className="muted">Data looked up: {(entry.tools ?? []).map(toolName).join(", ") || "None"}</div>
+      {(entry.record_ids ?? []).length > 0 && (
+        <details className="records">
+          <summary>Show records</summary>
+          <span className="chips">
+            {(entry.record_ids ?? []).map((id) => (
+              <CitationChip key={id} id={id} />
+            ))}
+          </span>
+        </details>
+      )}
     </div>
   );
 }
@@ -78,8 +84,17 @@ function Changes() {
                 c.user_name ?? c.user_id,
                 c.user_role ? ROLE_LABELS[c.user_role] : "",
                 c.type === "reassignment" ? "Reassignment" : "Question asked",
-                <span key="what" className={c.type === "ask" ? "mono" : undefined}>
-                  {c.summary}
+                <span key="what">
+                  {c.type === "ask" ? (
+                    <>
+                      Question (text not stored)
+                      <span className="cell-sub">
+                        Reference <span className="mono">{c.question_hash}</span>
+                      </span>
+                    </>
+                  ) : (
+                    c.summary
+                  )}
                 </span>,
                 <Details key="details" entry={c} />,
               ])}

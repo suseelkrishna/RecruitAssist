@@ -26,7 +26,7 @@ export function DaysOpenChart({ data }: { data: DashboardResponse }) {
         <BarChart data={rows} layout="vertical" margin={{ top: 8, right: 96, bottom: 8, left: 8 }}>
           <CartesianGrid stroke={COLORS.grid} horizontal={false} />
           <XAxis type="number" {...AXIS} />
-          <YAxis type="category" dataKey="job_id" {...AXIS} width={56} />
+          <YAxis type="category" dataKey="title" {...AXIS} width={150} fontSize={11} />
           <Tooltip {...TOOLTIP} />
           <Legend />
           <Bar dataKey="days_open" name="Days open" fill={COLORS.main} {...STILL}>

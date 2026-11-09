@@ -7,6 +7,7 @@ import { useState } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ChartCard } from "@/components/ChartCard";
 import { AXIS, COLORS, SERIES, STILL, TOOLTIP } from "@/components/charts/theme";
+import { formatDate } from "@/lib/format";
 import type { DashboardResponse, WeekRow } from "@/lib/types";
 
 /** Rows of { week_start, [source]: applicants } for stacked bars. Values are copied, not added. */
@@ -36,9 +37,9 @@ export function ApplicantsChart({ data }: { data: DashboardResponse }) {
         split
           ? {
               columns: ["Week starting", "Source", "Applicants"],
-              rows: data.applicants_over_time.weeks.map((w) => [w.week_start, w.source ?? "", w.applicants]),
+              rows: data.applicants_over_time.weeks.map((w) => [formatDate(w.week_start), w.source ?? "", w.applicants]),
             }
-          : { columns: ["Week starting", "Applicants"], rows: total.weeks.map((w) => [w.week_start, w.applicants]) }
+          : { columns: ["Week starting", "Applicants"], rows: total.weeks.map((w) => [formatDate(w.week_start), w.applicants]) }
       }
       controls={<Switch label="Split by source" checked={split} onCheckedChange={setSplit} />}
       chart={
@@ -46,7 +47,7 @@ export function ApplicantsChart({ data }: { data: DashboardResponse }) {
         {split ? (
           <BarChart data={split_.rows} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
             <CartesianGrid stroke={COLORS.grid} vertical={false} />
-            <XAxis dataKey="week_start" {...AXIS} />
+            <XAxis dataKey="week_start" {...AXIS} tickFormatter={formatDate} />
             <YAxis {...AXIS} allowDecimals={false} />
             <Tooltip {...TOOLTIP} />
             <Legend />
@@ -57,7 +58,7 @@ export function ApplicantsChart({ data }: { data: DashboardResponse }) {
         ) : (
           <BarChart data={total.weeks} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
             <CartesianGrid stroke={COLORS.grid} vertical={false} />
-            <XAxis dataKey="week_start" {...AXIS} />
+            <XAxis dataKey="week_start" {...AXIS} tickFormatter={formatDate} />
             <YAxis {...AXIS} allowDecimals={false} />
             <Tooltip {...TOOLTIP} />
             <Bar dataKey="applicants" name="Applicants" fill={COLORS.main} {...STILL} />

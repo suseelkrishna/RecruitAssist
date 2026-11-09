@@ -27,7 +27,17 @@ import { useLoad } from "@/lib/useLoad";
 const FILTERS = ["team", "job", "recruiter", "days"] as const;
 
 /** The filter bar. Choices come from the API's options, so a role only sees its own teams and jobs. */
-function Filters({ data, values, set }: { data: DashboardResponse | null; values: Record<(typeof FILTERS)[number], string>; set: (name: (typeof FILTERS)[number], value: string) => void }) {
+function Filters({
+  data,
+  values,
+  set,
+  clear,
+}: {
+  data: DashboardResponse | null;
+  values: Record<(typeof FILTERS)[number], string>;
+  set: (name: (typeof FILTERS)[number], value: string) => void;
+  clear: () => void;
+}) {
   const options = data?.options;
   return (
     <div className="filters" role="group" aria-label="Dashboard filters">
@@ -45,12 +55,17 @@ function Filters({ data, values, set }: { data: DashboardResponse | null; values
       <Field label="Applied in">
         <Select value={values.days} onChange={(e) => set("days", e.target.value)} options={[{ label: "All time", value: "" }, ...(options?.range_days ?? [30, 90, 180]).map((d) => ({ label: `Last ${d} days`, value: String(d) }))]} />
       </Field>
+      {FILTERS.some((f) => values[f]) && (
+        <button type="button" className="link-button filters-clear" onClick={clear}>
+          Clear filters
+        </button>
+      )}
     </div>
   );
 }
 
 function Dashboard() {
-  const [values, set] = useQueryFilters(FILTERS);
+  const [values, set, clear] = useQueryFilters(FILTERS);
   const key = FILTERS.map((f) => values[f]).join("|");
   const result = useLoad(() => getDashboard(values), key);
   if (result.state === "not_found") notFound();
@@ -64,7 +79,7 @@ function Dashboard() {
           <p>Every number here comes from the database for the jobs in your scope.</p>
         </div>
       </div>
-      <Filters data={data} values={values} set={set} />
+      <Filters data={data} values={values} set={set} clear={clear} />
       {result.state === "loading" && <LoadingSkeleton blocks={4} label="Loading the dashboard" />}
       {result.state === "error" && <ErrorState message={result.message} onRetry={result.reload} />}
       {data && (

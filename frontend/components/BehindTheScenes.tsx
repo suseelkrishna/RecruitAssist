@@ -7,6 +7,7 @@
 
 import { Accordion, DataTable } from "@suseelkrishna/fieryfusion-react";
 import { formatDateTime, show } from "@/lib/format";
+import { toolName } from "@/lib/tools";
 import type { AskResult } from "@/lib/types";
 
 export function BehindTheScenes({ result }: { result: AskResult }) {
@@ -17,8 +18,8 @@ export function BehindTheScenes({ result }: { result: AskResult }) {
         caption="Tools called"
         columns={["Tool", "Input", "Rows returned", "Time"]}
         rows={result.steps.map((s) => [
-          <span className="mono" key="tool">
-            {s.tool}
+          <span key="tool">
+            {toolName(s.tool)} <span className="mono muted">{s.tool}</span>
           </span>,
           <span className="mono" key="input">
             {JSON.stringify(s.input ?? {})}

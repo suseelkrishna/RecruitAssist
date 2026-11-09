@@ -22,10 +22,24 @@ import { formatDateTime } from "@/lib/format";
 import type { AskResult, Role } from "@/lib/types";
 import { useLoad } from "@/lib/useLoad";
 
-const CHIPS: Record<Role, string[]> = {
-  hr_user: ["What should I do today?", "Top 3 candidates for my role", "Who is waiting on me?"],
-  hr_manager: ["Where is my team losing candidates?", "Which recruiter is overloaded?", "Which roles are behind target?"],
-  admin: ["Company-wide pipeline health", "Which sources bring the best candidates?", "Any integration issues?"],
+type Suggestion = { question: string; about: string };
+
+const SUGGESTIONS: Record<Role, Suggestion[]> = {
+  hr_user: [
+    { question: "What should I do today?", about: "Your overdue and pending tasks, most urgent first." },
+    { question: "Top 3 candidates for my role", about: "The strongest active candidates, with the score behind each." },
+    { question: "Who is waiting on me?", about: "Candidates and interviewers waiting on a reply or a decision." },
+  ],
+  hr_manager: [
+    { question: "Where is my team losing candidates?", about: "The stages where candidates drop out, and why." },
+    { question: "Which recruiter is overloaded?", about: "Active candidates and overdue tasks for each recruiter." },
+    { question: "Which roles are behind target?", about: "Open jobs that have been open longer than planned." },
+  ],
+  admin: [
+    { question: "Company-wide pipeline health", about: "Open jobs, candidates, offers, and overdue work across all teams." },
+    { question: "Which sources bring the best candidates?", about: "How often applicants from each source reach Onsite and get hired." },
+    { question: "Any integration issues?", about: "Sync status and recent errors for each connected system." },
+  ],
 };
 
 /** The dashboard panel that shows the same numbers as a question, for when asking fails. */
@@ -141,23 +155,14 @@ function Ask() {
             Your scope: {summary.jobs} jobs, {summary.active_candidates} candidates, {summary.overdue_tasks} overdue tasks
           </p>
         </div>
-        <Field label="Job focus">
-          <Select
+        <div className="field-narrow">
+          <Field label="Limit to one job">
+            <Select
             value={jobId}
             onChange={(e) => setJobId(e.target.value)}
             options={[{ label: "All jobs in my scope", value: "" }, ...scope.jobs.map((j) => ({ label: `${j.job_id} ${j.title}`, value: j.job_id }))]}
           />
-        </Field>
-      </div>
-
-      <div>
-        <p className="label-small">Suggested questions</p>
-        <div className="card-actions">
-          {CHIPS[user.role].map((chip) => (
-            <Button key={chip} variant="secondary" size="sm" disabled={waiting} onClick={() => void send(chip)}>
-              {chip}
-            </Button>
-          ))}
+          </Field>
         </div>
       </div>
 
@@ -186,8 +191,31 @@ function Ask() {
         </Alert>
       )}
 
-      {turns.length === 0 && !waiting && !failure && (
-        <p className="muted">No questions yet. Pick a suggested question or type your own.</p>
+      {turns.length === 0 && !waiting ? (
+        <section aria-labelledby="suggested">
+          <h2 id="suggested" className="label-small">
+            Try one of these
+          </h2>
+          <ul className="grid grid-3 list-plain" style={{ marginTop: 8 }}>
+            {SUGGESTIONS[user.role].map((s) => (
+              <li key={s.question}>
+                <button type="button" className="suggestion" onClick={() => void send(s.question)}>
+                  <span className="suggestion-question">{s.question}</span>
+                  <span className="suggestion-about">{s.about}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : (
+        <div className="card-actions" aria-label="Suggested questions">
+          <span className="label-small">Suggested</span>
+          {SUGGESTIONS[user.role].map((s) => (
+            <Button key={s.question} variant="secondary" size="sm" disabled={waiting} onClick={() => void send(s.question)}>
+              {s.question}
+            </Button>
+          ))}
+        </div>
       )}
       {turns.map((turn, i) => (
         <AnswerCard key={turns.length - i} turn={turn} />

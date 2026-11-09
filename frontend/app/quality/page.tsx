@@ -59,7 +59,7 @@ function Section({ title, value, missing }: { title: string; value: unknown; mis
       )}
       {missing && (
         <p className="muted" style={{ marginBottom: 0 }}>
-          {missing}
+          This report has not been produced yet.
         </p>
       )}
     </Card>

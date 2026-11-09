@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Footer } from "@/components/Footer";
+import { Logo } from "@/components/Logo";
 
 /**
  * Shown for an unknown page, and for a record that is outside the user's scope. The API
@@ -9,7 +10,10 @@ export default function NotFound() {
   return (
     <>
       <main className="landing" id="content">
-        <p className="label-small">Not found</p>
+        <Logo size={40} />
+        <p className="label-small" style={{ marginTop: 16 }}>
+          Not found
+        </p>
         <h1>This page is not available.</h1>
         <p className="muted">It does not exist, or it is outside the jobs your role can see.</p>
         <p>

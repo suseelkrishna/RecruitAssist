@@ -45,7 +45,10 @@ export function FunnelChart({ data }: { data: DashboardResponse }) {
       </ResponsiveContainer>
       }
     >
-      <div className="card-actions" aria-label="List candidates by stage">
+      <p className="label-small" style={{ marginTop: 8 }}>
+        Show who is in a stage now
+      </p>
+      <div className="card-actions" aria-label="Show who is in a stage now">
         {funnel.stages
           .filter((s) => s.in_stage > 0)
           .map((s) => (

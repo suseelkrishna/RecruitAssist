@@ -109,6 +109,7 @@ export type DashboardResponse = {
     declined: string[];
     withdrawn: string[];
     pending: string[];
+    names: Record<string, string>;
     acceptance_rate_pct: number | null;
   };
   recruiter_load: (Takeaway & { recruiters: RecruiterLoad[] }) | null;
@@ -164,7 +165,7 @@ export type Task = {
   evidence: string[];
 };
 
-export type ScoreComponent = { value: number; weighted: number; evidence: string[] };
+export type ScoreComponent = { value: number; weighted: number; evidence: string[]; points?: number; max_points?: number };
 
 export type RankedCandidate = {
   rank: number;
@@ -173,6 +174,7 @@ export type RankedCandidate = {
   full_name: string;
   current_stage: string;
   score: number;
+  score_100?: number;
   components: {
     scorecards: ScoreComponent & { count: number; avg_points: number | null };
     must_have: ScoreComponent & { avg_rating_by_skill: Record<string, number | null> };
@@ -190,7 +192,9 @@ export type JobDetail = JobRow & {
   can_reassign: boolean;
   reassign_options: { user_id: string; name: string }[];
   funnel: FunnelStage[];
-  candidates: Pick<RankedCandidate, "rank" | "application_id" | "full_name" | "current_stage" | "score" | "incomplete_evidence">[];
+  candidates: (Pick<RankedCandidate, "rank" | "application_id" | "full_name" | "current_stage" | "score" | "incomplete_evidence"> & {
+    score_100: number;
+  })[];
   candidate_pool: number;
   top_3: RankedCandidate[];
   rubric_weights: Record<string, number>;
