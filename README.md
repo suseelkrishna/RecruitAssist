@@ -4,7 +4,7 @@
 
 RecruitAssist answers a recruiter's questions about a hiring pipeline, such as "Who are the top 3 candidates for this role?" or "What is overdue?", with every number computed by tested code and every claim cited to a record. A deterministic verifier checks each answer before the recruiter sees it, and a role-scoped dashboard, job list, task board, and change log sit alongside it.
 
-**Live demo:** LIVE_DEMO_URL
+**Live demo:** https://recruitassist-alpha.vercel.app
 
 ![The Ask page: an HR User asks for the top 3 candidates and gets a verified, cited ranking](docs/screenshot-ask.png)
 
@@ -21,6 +21,12 @@ All data is synthetic. The company, Northbeam Robotics, is fictional, and so are
 4. Open a job from **Jobs** to see its funnel and ranked candidates, each scored out of 100. **How it works** in the top bar explains the steps behind every answer.
 
 Switching users is a demo feature, not authentication. There are no passwords.
+
+## Live demo
+
+The demo runs at https://recruitassist-alpha.vercel.app, with the API at https://recruit-assist-nine.vercel.app. Both deploy to production on every merge to `main`.
+
+To keep model spending bounded without a passcode, live answers are limited to 10 questions per IP address per hour and to `DAILY_LIVE_CAP` questions per day across all visitors. Both counters live in Redis. Past either limit, a suggested question gets its recorded answer, marked as recorded, and any other question gets a friendly message to try again later.
 
 ## Repo structure
 
@@ -299,7 +305,21 @@ claude mcp add recruitassist --scope user -- "$PWD/backend/.venv/bin/python" "$P
 | `BACKEND_URL` | Frontend | Where `/api/*` is forwarded, default `http://localhost:8000` |
 | `NPM_TOKEN` | Frontend install | Reads the private brand kit |
 
-The app is hosted as two Vercel projects from this repository, with root directories `backend/` and `frontend/`.
+## Deploying to Vercel
+
+The app is hosted as two Vercel projects on the Hobby plan, both connected to this repository so that every merge to `main` deploys to production:
+
+| Project | Root Directory | Preset | Environment variables |
+|---|---|---|---|
+| `recruitassist-api` | `backend/` | FastAPI | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `DAILY_LIVE_CAP`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` |
+| `recruitassist` | `frontend/` | Next.js | `BACKEND_URL`, `NPM_TOKEN` |
+
+- **Backend.** Vercel runs the FastAPI app from `app/main.py` on Python 3.12 (`backend/.python-version`) and installs the pinned dependencies. `pyproject.toml` names the entrypoint so that the older `server.py` is not picked instead. `backend/vercel.json` adds the database, the recorded answers, the eval and quality JSON files, and the test files (the quality page counts them) to the function bundle.
+- **Answer time.** One answer can take up to 6 model rounds, so `vercel.json` sets the function's maximum duration to 300 seconds. That is the current Hobby limit with Fluid compute; Pro allows up to 800 seconds.
+- **Redis.** Upstash Redis, added from the Vercel Marketplace on its free tier, holds the change log, reassignments, and rate limits. Without it the store lives in memory and resets whenever the function restarts.
+- **Frontend.** `next.config.ts` forwards `/api/:path*` to `${BACKEND_URL}/api/:path*`. The browser only talks to the frontend's domain, so the backend needs no CORS setup. `NPM_TOKEN` must be available at build time. Use a classic GitHub token with only the `read:packages` scope; `frontend/.npmrc` reads it to install the brand kit.
+- **Secrets.** Only the backend sees `ANTHROPIC_API_KEY` and the Redis token. No `NEXT_PUBLIC_*` variable is secret, and the root `.vercelignore` keeps local `.env` files out of CLI uploads.
+- **Spending.** Set a monthly spend limit for the API key's workspace in the Anthropic Console. The rate limits bound normal use, and the spend limit is the backstop if they are misconfigured.
 
 ## Project history
 

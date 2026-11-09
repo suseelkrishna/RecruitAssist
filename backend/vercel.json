@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "app/main.py": {
+      "maxDuration": 300,
+      "includeFiles": "{data/recruiting.db,data/recordings.json,evals/*.json,tests/test_*.py}",
+      "excludeFiles": "{.venv/**,evals_out/**,**/__pycache__/**,.pytest_cache/**}"
+    }
+  }
+}
