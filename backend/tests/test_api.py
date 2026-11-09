@@ -232,6 +232,20 @@ def test_change_log_is_scoped(client):
     assert all(client.get("/api/changes", headers=as_user(u)).status_code == 404 for u in ("USR-4", "USR-5", "USR-6"))
 
 
+
+@pytest.mark.parametrize("user_id", USERS)
+def test_quality_is_admin_only_with_the_out_of_scope_answer(client, user_id):
+    response = client.get("/api/quality", headers=as_user(user_id))
+    if user_id == "USR-1":
+        assert response.status_code == 200 and "tests_defined" in response.json()
+    else:
+        # The same 404 shape an out-of-scope job gets.
+        job = client.get("/api/jobs/JOB-999", headers=as_user(user_id))
+        assert response.status_code == job.status_code == 404
+        assert response.json() == {"error": "/api/quality is not in your scope"}
+        assert set(response.json()) == set(job.json())
+
+
 # Ask
 
 def test_ask_runs_the_agent_and_logs_no_question_text(client):
@@ -303,3 +317,67 @@ def test_recordings_do_not_cross_users_or_scopes(client, recorded):
     client.post("/api/jobs/JOB-1/assignment", headers=as_user("USR-1"), json={"recruiter_user_id": "USR-5"})
     moved = client.post("/api/ask", headers=as_user("USR-4"), json={"question": "How many jobs can I see?"})
     assert moved.status_code == 503
+
+
+INTERNAL_KEYS = {"steps", "usage", "latency_ms", "estimated_cost_usd", "provider", "effort",
+                 "served_by", "retried", "verifier"}
+
+
+def answers_with_a_tool_input(params):
+    """A scripted model: call pending_tasks with an owner filter, then answer."""
+    last = params["messages"][-1]
+    if isinstance(last["content"], str):
+        return reply(tool_use("t1", "pending_tasks", {"owner_user_id": "USR-4"}), stop="tool_use")
+    return reply(text("Here are your tasks."))
+
+
+def all_keys(value) -> set[str]:
+    """Every dict key anywhere in a JSON value."""
+    if isinstance(value, dict):
+        return set(value) | {k for v in value.values() for k in all_keys(v)}
+    if isinstance(value, list):
+        return {k for v in value for k in all_keys(v)}
+    return set()
+
+
+@pytest.mark.parametrize("user_id", ["USR-2", "USR-4"])
+def test_ask_hides_behind_the_scenes_from_non_admins(client, user_id):
+    use_fake_model(answers_with_a_tool_input)
+    response = client.post("/api/ask", headers=as_user(user_id), json={"question": "What is pending?"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["answer"] == "Here are your tasks." and body["source"] == "live" and "verified" in body
+    assert not all_keys(body) & INTERNAL_KEYS
+    assert "owner_user_id" not in response.text and "USR-4" not in response.text
+    # The change log still records the tools used from the full result.
+    change = client.get("/api/changes", headers=as_user("USR-1")).json()["changes"][0]
+    assert change["tools"] == ["pending_tasks"]
+
+
+def test_ask_shows_behind_the_scenes_to_admin(client):
+    use_fake_model(answers_with_a_tool_input)
+    body = client.post("/api/ask", headers=as_user("USR-1"), json={"question": "What is pending?"}).json()
+    assert body["steps"][0]["tool"] == "pending_tasks"
+    assert body["steps"][0]["input"] == {"owner_user_id": "USR-4"}
+    assert body["usage"]["api_calls"] == 2 and "verifier" in body
+
+
+def test_recorded_answers_are_redacted_for_non_admins(client, recorded):
+    main.app.dependency_overrides[main.model_client] = lambda: None
+    body = client.post("/api/ask", headers=as_user("USR-4"), json={"question": "How many jobs can I see?"}).json()
+    assert body["source"] == "recording" and body["recorded_at"] == "2026-11-09T00:00:00Z"
+    assert body["recording_reason"] == "live_unavailable" and "steps" not in body
+
+
+def test_ask_accepts_history_citations_and_rejects_bad_ones(client):
+    fake = use_fake_model(answers_job_count)
+    turn = {"question": "How many jobs?", "answer": "3 jobs.", "citations": ["JOB-1", "APP-062"]}
+    ok = client.post("/api/ask", headers=as_user("USR-4"), json={"question": "And now?", "history": [turn]})
+    assert ok.status_code == 200
+    assert "Records cited: JOB-1, APP-062" in fake.requests[0]["messages"][0]["content"]
+    bad = {**turn, "citations": ["not an id"]}
+    assert client.post("/api/ask", headers=as_user("USR-4"),
+                       json={"question": "x", "history": [bad]}).status_code == 422
+    too_many = {**turn, "citations": [f"APP-{n:03d}" for n in range(51)]}
+    assert client.post("/api/ask", headers=as_user("USR-4"),
+                       json={"question": "x", "history": [too_many]}).status_code == 422

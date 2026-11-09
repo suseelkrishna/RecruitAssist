@@ -52,7 +52,7 @@ def score_candidates(principal: Principal, job_id: str, top_n: int = 3,
     as_of = resolve_as_of(as_of)
     params = scope_params(principal, job=job_id, as_of=as_of)
     apps = db.rows(f"""
-        SELECT a.application_id, a.candidate_id, c.full_name, a.current_stage
+        SELECT a.application_id, a.candidate_id, c.full_name, c.source, a.current_stage
         FROM applications a JOIN candidates c ON c.candidate_id = a.candidate_id
         WHERE a.job_id = :job AND a.job_id {IN_SCOPE}
           AND a.status = 'active' AND a.applied_at <= :as_of
@@ -128,6 +128,7 @@ def score_one(app: dict[str, Any], must_haves: list[str], interviews: list[dict[
         "application_id": app["application_id"],
         "candidate_id": app["candidate_id"],
         "full_name": app["full_name"],
+        "source": app["source"],
         "current_stage": app["current_stage"],
         "score": round(score, 4),
         "components": {

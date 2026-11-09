@@ -26,9 +26,9 @@ from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app import access, checks, llm, quality, store
+from app import access, checks, conversations, llm, quality, store
 from app.access import Principal
-from app.agent import loop, recordings
+from app.agent import loop, recordings, redact
 from app.env import load_env_file
 from app.logic import analytics, assignments, catchup, changelog, evidence, scope, sources, tasks
 from app.logic.common import NotAllowedError, OutOfScopeError, require_job
@@ -43,6 +43,8 @@ DAY = 86400
 
 JobId = Annotated[str, Path(pattern=r"^JOB-\d+$")]
 ApplicationId = Annotated[str, Path(pattern=r"^APP-\d+$")]
+CONVERSATION_ID = r"^CONV-[a-z0-9]{12}$"
+ConversationId = Annotated[str, Path(pattern=CONVERSATION_ID)]
 DateParam = r"^\d{4}-\d{2}-\d{2}$"
 
 app = FastAPI(title="RecruitAssist API", docs_url="/api/docs", openapi_url="/api/openapi.json")
@@ -57,11 +59,13 @@ class AssignmentBody(BaseModel):
 
 
 class HistoryItem(BaseModel):
-    """One earlier question and answer in the conversation."""
+    """One earlier question and answer in the conversation, with the record IDs the answer cited."""
 
     model_config = ConfigDict(extra="forbid")
     question: str = Field(max_length=1000)
     answer: str = Field(max_length=8000)
+    citations: list[Annotated[str, Field(pattern=r"^[A-Z]+-\d+$", max_length=20)]] = Field(
+        default_factory=list, max_length=50)
 
 
 class AskBody(BaseModel):
@@ -71,6 +75,21 @@ class AskBody(BaseModel):
     question: str = Field(min_length=1, max_length=1000)
     job_id: str | None = Field(default=None, pattern=r"^JOB-\d+$")
     history: list[HistoryItem] = Field(default_factory=list, max_length=20)
+    conversation_id: str | None = Field(default=None, pattern=CONVERSATION_ID)
+
+
+class ConversationBody(BaseModel):
+    """The body of a new conversation: an optional title. Without one it is named from its first question."""
+
+    model_config = ConfigDict(extra="forbid")
+    title: str | None = Field(default=None, max_length=conversations.MAX_TITLE_CHARS)
+
+
+class RenameBody(BaseModel):
+    """The body of a rename: the new title."""
+
+    model_config = ConfigDict(extra="forbid")
+    title: str = Field(min_length=1, max_length=conversations.MAX_TITLE_CHARS)
 
 
 def error(status: int, message: str, **extra: Any) -> JSONResponse:
@@ -243,23 +262,75 @@ def changes(user: User) -> dict[str, Any]:
 
 @app.get("/api/quality")
 def quality_page(user: User) -> dict[str, Any]:
-    """Test counts, mutation score, RBAC result, and the eval scoreboard."""
+    """Test counts, mutation score, RBAC result, and the eval scoreboard. admin only; other
+    roles get a 404."""
+    require_role(user, ("admin",), "/api/quality")
     return quality.quality_report()
+
+
+@app.get("/api/conversations")
+def list_conversations(user: User) -> dict[str, Any]:
+    """The user's saved conversations, newest first. Admin also sees which store holds them."""
+    body: dict[str, Any] = {"conversations": conversations.list_for(user)}
+    if user.role == "admin":
+        body["storage"] = store.backend()
+    return body
+
+
+@app.post("/api/conversations")
+def create_conversation(user: User, body: ConversationBody) -> Any:
+    """Start an empty conversation for the user."""
+    try:
+        return conversations.create(user, body.title)
+    except ValueError as exc:
+        return error(422, str(exc))
+
+
+@app.get("/api/conversations/{conversation_id}")
+def get_conversation(user: User, conversation_id: ConversationId) -> dict[str, Any]:
+    """One of the user's conversations with its turns, oldest first. Anyone else's is a 404."""
+    return conversations.get(user, conversation_id)
+
+
+@app.patch("/api/conversations/{conversation_id}")
+def rename_conversation(user: User, conversation_id: ConversationId, body: RenameBody) -> Any:
+    """Rename one of the user's conversations."""
+    try:
+        return conversations.rename(user, conversation_id, body.title)
+    except ValueError as exc:
+        return error(422, str(exc))
+
+
+@app.delete("/api/conversations/{conversation_id}")
+def delete_conversation(user: User, conversation_id: ConversationId) -> dict[str, Any]:
+    """Delete one of the user's conversations and its turns."""
+    conversations.delete(user, conversation_id)
+    return {"deleted": conversation_id}
 
 
 @app.post("/api/ask")
 async def ask(user: User, body: AskBody, request: Request,
               client: Annotated[Any, Depends(model_client)]) -> Any:
-    """Run the agent and return the full result with source live or recording.
+    """Run the agent and return the result with source live or recording. Admin gets the full
+    result; other roles get only the answer fields (see agent/redact.py).
 
     Live answers are limited to ASK_LIMIT_PER_IP_PER_HOUR per IP and DAILY_LIVE_CAP per
     day overall. Past a limit, or without an API key, a matching recording is returned
     if there is one. Each answered question adds a change event holding a hash of the
     question, the tools used, and the cited record IDs, never candidate text.
+
+    With conversation_id, the conversation must be the user's own (else 404) and not full
+    (else 409). Its stored turns are the history, in place of any history in the body, and
+    the answer is saved as a new turn whose turn_id is returned with conversation_id.
     """
     if body.job_id is not None:
         require_job(user, body.job_id)
     history = [h.model_dump() for h in body.history]
+    if body.conversation_id is not None:
+        if conversations.is_full(conversations.require(user, body.conversation_id)):
+            return error(409, f"This chat has reached {conversations.MAX_TURNS} questions. "
+                              "Start a new chat to keep asking.")
+        history = conversations.history_for(user, body.conversation_id)
     limited = (store.hit_rate_limit(f"ask:ip:{client_ip(request)}", ASK_LIMIT_PER_IP_PER_HOUR, HOUR)
                or store.hit_rate_limit("ask:all", daily_live_cap(), DAY))
     result = None
@@ -289,7 +360,11 @@ async def ask(user: User, body: AskBody, request: Request,
         "source": result["source"],
         "verified": result["verified"],
     })
-    return result
+    shown = redact.public_result(result, user.role)
+    if body.conversation_id is not None:
+        turn = conversations.append_turn(user, body.conversation_id, body.question, body.job_id, result)
+        shown = {**shown, "conversation_id": body.conversation_id, "turn_id": turn["turn_id"]}
+    return shown
 
 
 def client_ip(request: Request) -> str:

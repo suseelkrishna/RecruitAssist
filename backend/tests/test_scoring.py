@@ -140,3 +140,11 @@ def test_empty_role_returns_an_empty_ranking(use_db):
 def test_top_n_out_of_range(top_n):
     with pytest.raises(ToolError, match="top_n must be between 1 and 50"):
         scoring.score_candidates(admin(), "JOB-2", top_n=top_n)
+
+
+def test_each_ranked_candidate_carries_their_source(db):
+    result = scoring.score_candidates(access.principal_for("USR-1"), "JOB-2", top_n=50)
+    expected = dict(db.execute(
+        """SELECT a.application_id, c.source FROM applications a
+           JOIN candidates c ON c.candidate_id = a.candidate_id WHERE a.job_id = 'JOB-2'""").fetchall())
+    assert result["ranked"] and all(r["source"] == expected[r["application_id"]] for r in result["ranked"])
