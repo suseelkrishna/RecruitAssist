@@ -641,6 +641,13 @@ span.chip {
   font-size: 0.875rem;
 }
 
+/* Quality cards hold report tables; they scroll inside the card instead of widening the page. */
+
+.quality-card {
+  min-width: 0;
+  overflow-x: auto;
+}
+
 /* "Show records" on change log entries. */
 
 .records summary {

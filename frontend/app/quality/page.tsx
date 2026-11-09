@@ -9,6 +9,7 @@
 import { Card, DataTable, Stack, StatusPill } from "@suseelkrishna/fieryfusion-react";
 import type { ReactNode } from "react";
 import { AppShell } from "@/components/AppShell";
+import { isScoreboard, Scoreboard } from "@/components/Scoreboard";
 import { ErrorState, LoadingSkeleton } from "@/components/PageStates";
 import { getQuality } from "@/lib/api";
 import { formatDateTime, words } from "@/lib/format";
@@ -49,13 +50,13 @@ function Value({ value, caption }: { value: unknown; caption: string }): ReactNo
 }
 
 /** One report section, or a note that the report has not been produced yet. */
-function Section({ title, value, missing }: { title: string; value: unknown; missing: string | undefined }) {
+function Section({ title, value, missing, children }: { title: string; value: unknown; missing: string | undefined; children?: ReactNode }) {
   return (
-    <Card title={title}>
+    <Card title={title} className="quality-card">
       {value === null || value === undefined ? (
         <StatusPill tone="info">Not run yet</StatusPill>
       ) : (
-        <Value value={value} caption={title} />
+        (children ?? <Value value={value} caption={title} />)
       )}
       {missing && (
         <p className="muted" style={{ marginBottom: 0 }}>
@@ -84,15 +85,17 @@ export default function QualityPage() {
       {result.state === "ready" && (
         <Stack gap={16} className="fade-in">
           <p className="muted">
-            {result.data.generated_at ? `Reports produced ${formatDateTime(result.data.generated_at)}.` : "No test reports have been produced yet."}{" "}
+            {result.data.generated_at ? `Test reports produced ${formatDateTime(result.data.generated_at)}.` : "Test reports have not been produced yet."}{" "}
             The backend defines {result.data.tests_defined} test functions.
           </p>
           <div className="grid grid-2">
             <Section title="Test results" value={result.data.tests} missing={missingFor("tests")} />
             <Section title="Mutation score" value={result.data.mutation_score} missing={missingFor("mutation_score")} />
             <Section title="Access matrix" value={result.data.rbac} missing={missingFor("rbac")} />
-            <Section title="Eval scoreboard by model" value={result.data.scoreboard} missing={missingFor("scoreboard")} />
           </div>
+          <Section title="Eval scoreboard by model" value={result.data.scoreboard} missing={missingFor("scoreboard")}>
+            {isScoreboard(result.data.scoreboard) ? <Scoreboard report={result.data.scoreboard} /> : undefined}
+          </Section>
         </Stack>
       )}
     </AppShell>
