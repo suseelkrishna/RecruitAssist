@@ -79,3 +79,12 @@ def health_row(name: str, runs: list[dict[str, Any]], as_of: str) -> dict[str, A
         "mode": MODE,
         "simulated": True,
     }
+
+
+SUMMARY_FIELDS = ["integration", "status", "last_sync", "mode", "simulated"]
+
+
+def integration_summary(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The read-only integration summary an hr_manager sees: status and last sync, without
+    record counts, error rates, or error messages."""
+    return [{k: r[k] for k in SUMMARY_FIELDS} for r in rows]

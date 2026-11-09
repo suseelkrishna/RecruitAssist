@@ -31,8 +31,9 @@ from app import access, checks, quality, store
 from app.access import Principal
 from app.agent import loop, recordings
 from app.env import load_env_file
-from app.logic import analytics, assignments, evidence, scope, sources, tasks
+from app.logic import analytics, assignments, changelog, evidence, scope, sources, tasks
 from app.logic.common import NotAllowedError, OutOfScopeError, require_job
+from app.logic.common import out_of_scope as not_in_scope
 
 load_env_file()
 
@@ -53,6 +54,7 @@ class AssignmentBody(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     recruiter_user_id: str = Field(pattern=r"^USR-\d+$")
+    reason: str | None = Field(default=None, max_length=assignments.REASON_MAX)
 
 
 class HistoryItem(BaseModel):
@@ -134,9 +136,9 @@ User = Annotated[Principal, Depends(principal)]
 
 
 @app.get("/api/health")
-def health() -> dict[str, str]:
-    """A liveness check that needs no user."""
-    return {"status": "ok"}
+def health() -> dict[str, Any]:
+    """Public liveness check with the live checks: database, model API (cached), and store."""
+    return {"status": "ok", "checks": checks.live_checks()}
 
 
 @app.get("/api/users")
@@ -148,9 +150,10 @@ def users() -> dict[str, Any]:
 @app.get("/api/me")
 def me(user: User) -> dict[str, Any]:
     """Who the current demo user is and their scope card."""
+    card = scope.scope_card(user)
     return {"user": {"user_id": user.user_id, "name": user.name, "role": user.role},
             "allowed_job_ids": sorted(user.allowed_job_ids), "team_ids": sorted(user.team_ids),
-            "scope": scope.scope_card(user)}
+            "summary": scope.scope_summary(card), "scope": card}
 
 
 @app.get("/api/dashboard")
@@ -159,16 +162,17 @@ def dashboard(user: User,
               job: Annotated[str | None, Query(pattern=r"^JOB-\d+$")] = None,
               recruiter: Annotated[str | None, Query(pattern=r"^USR-\d+$")] = None,
               date_from: Annotated[str | None, Query(alias="from", pattern=DateParam)] = None,
-              date_to: Annotated[str | None, Query(alias="to", pattern=DateParam)] = None) -> dict[str, Any]:
-    """Every dashboard metric for the filters, in one response."""
-    return analytics.dashboard(user, team_id=team, job_id=job, recruiter_user_id=recruiter,
+              date_to: Annotated[str | None, Query(alias="to", pattern=DateParam)] = None,
+              days: Annotated[int | None, Query()] = None) -> dict[str, Any]:
+    """Every dashboard metric for the filters, in one response. days is 30, 90, or 180."""
+    return analytics.dashboard(user, days=days, team_id=team, job_id=job, recruiter_user_id=recruiter,
                                date_from=date_from, date_to=date_to)
 
 
 @app.get("/api/jobs")
 def jobs(user: User) -> dict[str, Any]:
-    """The jobs in the user's scope."""
-    return scope.list_jobs(user)
+    """The jobs in the user's scope, with the columns and filter choices of the jobs page."""
+    return scope.job_board(user)
 
 
 @app.get("/api/jobs/{job_id}")
@@ -180,15 +184,15 @@ def job(user: User, job_id: JobId) -> dict[str, Any]:
 @app.post("/api/jobs/{job_id}/assignment")
 def reassign(user: User, job_id: JobId, body: AssignmentBody) -> dict[str, Any]:
     """Reassign the job's recruiter, record the change, and return the updated job."""
-    return assignments.reassign(user, job_id, body.recruiter_user_id)
+    return assignments.reassign(user, job_id, body.recruiter_user_id, body.reason)
 
 
 @app.get("/api/tasks")
 def pending(user: User,
             owner: Annotated[str | None, Query(pattern=r"^USR-\d+$")] = None,
             job: Annotated[str | None, Query(pattern=r"^JOB-\d+$")] = None) -> dict[str, Any]:
-    """Open and derived tasks in scope, most overdue first."""
-    return tasks.pending_tasks(user, owner_user_id=owner, job_id=job)
+    """Open and derived tasks in scope, most overdue first, grouped for the role."""
+    return tasks.task_board(user, owner_user_id=owner, job_id=job)
 
 
 @app.get("/api/candidates/{application_id}")
@@ -197,18 +201,29 @@ def candidate(user: User, application_id: ApplicationId) -> dict[str, Any]:
     return evidence.get_candidate_evidence(user, application_id)
 
 
+def require_role(user: Principal, roles: tuple[str, ...], page: str) -> None:
+    """404 for a role that may not open this page, the same answer as an out-of-scope ID."""
+    if user.role not in roles:
+        raise not_in_scope(page)
+
+
 @app.get("/api/sources")
 def source_health(user: User) -> dict[str, Any]:
-    """Integration health, source quality for the user's scope, and the live checks."""
-    return {"integrations": sources.integration_health()["integrations"],
-            "source_quality": analytics.source_quality(user),
-            "checks": checks.live_checks()}
+    """Integration health and source quality. admin sees the full integration rows, hr_manager
+    a read-only summary, and hr_user gets a 404."""
+    require_role(user, ("admin", "hr_manager"), "/api/sources")
+    rows = sources.integration_health()["integrations"]
+    full = user.role == "admin"
+    return {"integrations_view": "full" if full else "summary",
+            "integrations": rows if full else sources.integration_summary(rows),
+            "source_quality": analytics.source_quality(user)}
 
 
 @app.get("/api/changes")
 def changes(user: User) -> dict[str, Any]:
-    """The change log entries the user may see, newest first."""
-    return {"changes": store.list_changes(user)}
+    """The change log entries the user may see, newest first. admin and hr_manager only."""
+    require_role(user, ("admin", "hr_manager"), "/api/changes")
+    return changelog.change_log(user)
 
 
 @app.get("/api/quality")
@@ -241,6 +256,8 @@ async def ask(user: User, body: AskBody, request: Request,
             result = None
     if result is None:
         result = recordings.find(body.question, user.user_id, body.job_id, sorted(user.allowed_job_ids))
+        if result is not None:
+            result["recording_reason"] = "live_limit" if limited else "live_unavailable"
     if result is None:
         if limited:
             return error(429, "You have reached the limit for live answers. Try again later, or ask one "

@@ -269,16 +269,66 @@ def offer_acceptance(principal: Principal, **filters: Any) -> dict[str, Any]:
             "acceptance_rate_pct": rate, "takeaway": takeaway}
 
 
-def dashboard(principal: Principal, **filters: Any) -> dict[str, Any]:
-    """Every dashboard metric for one set of filters, in one response. recruiter_load is None
-    for roles that may not see it, so the page can hide that panel."""
+RANGE_DAYS = [30, 90, 180]
+
+
+def range_start(days: int, as_of: str) -> str:
+    """The YYYY-MM-DD date `days` days before as_of, for the dashboard's 30, 90, or 180 day range."""
+    if days not in RANGE_DAYS:
+        raise ToolError(f"days must be one of {', '.join(map(str, RANGE_DAYS))}, got {days}.")
+    return (parse_ts(as_of) - timedelta(days=days)).strftime("%Y-%m-%d")
+
+
+def stage_candidates(principal: Principal, **filters: Any) -> dict[str, list[dict[str, Any]]]:
+    """Active applications in view by their current stage, so a funnel stage can list its candidates."""
+    jobs, as_of, start, end = view(principal, filters)
+    active = [a for a in applications(principal, ids(jobs), as_of, start, end) if a["status"] == "active"]
+    names = {r["application_id"]: r["full_name"] for r in db.rows(f"""
+        SELECT a.application_id, c.full_name FROM applications a
+        JOIN candidates c ON c.candidate_id = a.candidate_id WHERE a.job_id {IN_SCOPE}""",
+        scope_params(principal))}
+    result: dict[str, list[dict[str, Any]]] = {}
+    for a in active:
+        result.setdefault(a["current_stage"], []).append(
+            {"application_id": a["application_id"], "full_name": names[a["application_id"]], "job_id": a["job_id"]})
+    return result
+
+
+def filter_options(principal: Principal) -> dict[str, Any]:
+    """The teams, jobs, and recruiters the dashboard filters may offer this principal.
+    Recruiters are offered to admin and hr_manager only."""
+    jobs = jobs_in_view(principal, None, None, None)
+    users = {u["user_id"]: u["name"] for u in db.rows("SELECT user_id, name FROM users")}
+    teams = sorted({(j["team_id"], j["team"]) for j in jobs})
+    recruiters = sorted({j["recruiter_user_id"] for j in jobs if j["recruiter_user_id"]})
+    return {
+        "teams": [{"team_id": t, "name": n} for t, n in teams],
+        "jobs": [{"job_id": j["job_id"], "title": j["title"]} for j in jobs],
+        "recruiters": ([{"user_id": u, "name": users[u]} for u in recruiters]
+                       if principal.role in ("admin", "hr_manager") else []),
+        "range_days": RANGE_DAYS,
+    }
+
+
+def dashboard(principal: Principal, days: int | None = None, **filters: Any) -> dict[str, Any]:
+    """Every dashboard metric for one set of filters, in one response, with the filter choices
+    and the candidates behind each funnel stage. days (30, 90, or 180) sets date_from to that
+    many days before as_of. recruiter_load is None for roles that may not see it, so the page
+    can hide that panel."""
+    if days is not None:
+        if filters.get("date_from") is not None:
+            raise ToolError("Send either days or a from date, not both.")
+        filters["date_from"] = range_start(days, resolve_as_of(filters.get("as_of")))
     allowed_load = principal.role in ("admin", "hr_manager")
     return {
-        "filters": {k: v for k, v in filters.items() if v is not None},
+        "filters": {k: v for k, v in {**filters, "days": days}.items() if v is not None},
+        "options": filter_options(principal),
         "kpis": kpis(principal, **filters),
         "funnel": funnel(principal, **filters),
+        "stage_candidates": stage_candidates(principal, **filters),
         "days_open_vs_target": days_open_vs_target(principal, **filters),
         "applicants_over_time": applicants_over_time(principal, by_source=True, **filters),
+        "applicants_total": applicants_over_time(principal, by_source=False, **filters),
         "source_quality": source_quality(principal, **filters),
         "time_in_stage": time_in_stage(principal, **filters),
         "withdrawal_reasons": withdrawal_reasons(principal, **filters),

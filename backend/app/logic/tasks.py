@@ -205,3 +205,40 @@ def derived(rule_id: str, row: dict[str, Any], due_at: str, evidence: list[str],
     """A derived task item before its owner and lateness are filled in."""
     return {"rule_id": rule_id, "title": title, "job_id": row["job_id"],
             "application_id": row["application_id"], "due_at": due_at, "evidence": evidence}
+
+
+def task_board(principal: Principal, owner_user_id: str | None = None, job_id: str | None = None,
+               as_of: str | None = None) -> dict[str, Any]:
+    """The tasks page: pending and overdue tasks grouped for the role.
+
+    hr_user sees only tasks they own, in one group. hr_manager sees their teams' tasks grouped
+    by owner. admin sees every task grouped by team. Each task says whether it is explicit (a
+    row in the tasks table) or derived from a rule, with the rule's text, and each group has
+    its own counts so the page does not count.
+    """
+    if principal.role == "hr_user":
+        owner_user_id = principal.user_id
+    result = pending_tasks(principal, owner_user_id=owner_user_id, job_id=job_id, as_of=as_of)
+    teams = {r["job_id"]: (r["team_id"], r["team"]) for r in db.rows(
+        f"""SELECT j.job_id, t.team_id, t.name AS team FROM jobs j JOIN teams t ON t.team_id = j.team_id
+            WHERE j.job_id {IN_SCOPE}""", scope_params(principal))}
+    for task in result["tasks"]:
+        task["team_id"], task["team"] = teams[task["job_id"]]
+        rule = task.get("rule_id") or task.get("matched_rule_id")
+        task["kind"] = "derived" if task.get("rule_id") else "explicit"
+        task["rule_text"] = RULES.get(rule) if rule else None
+    group_by = {"admin": "team", "hr_manager": "owner"}.get(principal.role)
+    groups: dict[str, dict[str, Any]] = {}
+    for task in result["tasks"]:
+        if group_by == "team":
+            key, label = task["team_id"], task["team"]
+        elif group_by == "owner":
+            key, label = task["owner_user_id"] or "unassigned", task["owner_name"] or "Unassigned"
+        else:
+            key, label = "mine", "My tasks"
+        group = groups.setdefault(key, {"key": key, "label": label, "count": 0, "overdue_count": 0, "tasks": []})
+        group["tasks"].append(task)
+        group["count"] += 1
+        group["overdue_count"] += task["status"] == "overdue"
+    return {**result, "group_by": group_by or "none",
+            "groups": sorted(groups.values(), key=lambda g: g["label"])}

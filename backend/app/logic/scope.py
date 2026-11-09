@@ -58,3 +58,37 @@ def scope_card(principal: Principal, job_id: str | None = None, as_of: str | Non
     overdue = pending_tasks(principal, job_id=job_id, as_of=as_of)["overdue_count"]
     return {"as_of": as_of, "role": principal.role, "jobs": cards, "overdue_items": overdue,
             "note": "active_candidates lists [application_id, name] for active applications only."}
+
+
+def job_board(principal: Principal, as_of: str | None = None) -> dict[str, Any]:
+    """The jobs page: every job in scope with its hiring manager, active candidates per stage
+    for the mini funnel, and overdue tasks, plus the team and recruiter choices for its filters.
+    The agent's list_jobs tool stays compact; this adds what the table shows."""
+    listed = list_jobs(principal, as_of)
+    params = scope_params(principal)
+    managers = {r["job_id"]: r["hiring_manager"] for r in db.rows(
+        f"SELECT job_id, hiring_manager FROM jobs WHERE job_id {IN_SCOPE}", params)}
+    stage_rows = db.rows(f"""
+        SELECT job_id, current_stage, COUNT(*) AS n FROM applications
+        WHERE job_id {IN_SCOPE} AND status = 'active' GROUP BY job_id, current_stage""", params)
+    overdue = [t for t in pending_tasks(principal, as_of=listed["as_of"])["tasks"] if t["status"] == "overdue"]
+    for job in listed["jobs"]:
+        counts = {r["current_stage"]: r["n"] for r in stage_rows if r["job_id"] == job["job_id"]}
+        job["hiring_manager"] = managers[job["job_id"]]
+        job["active_by_stage"] = [{"stage": s, "count": counts.get(s, 0)} for s in STAGES if s != "Hired"]
+        job["overdue_tasks"] = sum(1 for t in overdue if t["job_id"] == job["job_id"])
+        job["over_target"] = job["status"] == "open" and job["days_open"] > job["target_fill_days"]
+    teams = sorted({(j["team_id"], j["team"]) for j in listed["jobs"]})
+    recruiters = sorted({(j["recruiter_user_id"], j["recruiter_name"]) for j in listed["jobs"]
+                         if j["recruiter_user_id"]})
+    return {**listed,
+            "teams": [{"team_id": t, "name": n} for t, n in teams],
+            "recruiters": [{"user_id": u, "name": n} for u, n in recruiters]}
+
+
+def scope_summary(card: dict[str, Any]) -> dict[str, int]:
+    """The three counts in the app's scope header, from a scope card: jobs in scope, active
+    candidates across them, and overdue tasks."""
+    return {"jobs": len(card["jobs"]),
+            "active_candidates": sum(len(j["active_candidates"]) for j in card["jobs"]),
+            "overdue_tasks": card["overdue_items"]}

@@ -1,0 +1,101 @@
+"use client";
+
+/**
+ * The change log from GET /api/changes, newest first: reassignments and questions asked.
+ * Question entries show only a short hash of the question, the tools used, the record IDs
+ * touched, and the verifier result; no candidate text is stored. The log is append-only, so
+ * there are no edit or delete controls. HR Users get the not-found page.
+ */
+
+import { DataTable, SegmentedControl, StatusPill } from "@suseelkrishna/fieryfusion-react";
+import { notFound } from "next/navigation";
+import { Suspense } from "react";
+import { AppShell } from "@/components/AppShell";
+import { CitationChip } from "@/components/CitationChip";
+import { Empty, ErrorState, LoadingSkeleton } from "@/components/PageStates";
+import { getChanges } from "@/lib/api";
+import { formatDateTime } from "@/lib/format";
+import { useQueryFilters } from "@/lib/query";
+import { ROLE_LABELS } from "@/lib/roles";
+import type { ChangeEntry } from "@/lib/types";
+import { useLoad } from "@/lib/useLoad";
+
+const KINDS = { All: "", Reassignments: "reassignment", Questions: "ask" } as const;
+type KindLabel = keyof typeof KINDS;
+
+/** The details column: the reason for a reassignment, or tools, records, and verifier for a question. */
+function Details({ entry }: { entry: ChangeEntry }) {
+  if (entry.type === "reassignment") return <span>{entry.reason ? `Reason: ${entry.reason}` : "No reason given"}</span>;
+  return (
+    <div style={{ maxWidth: 380 }}>
+      <div>
+        {entry.verified ? <StatusPill tone="success">Verified</StatusPill> : <StatusPill tone="warning">Needs review</StatusPill>}{" "}
+        {entry.source === "recording" && <span className="muted">Recorded answer</span>}
+      </div>
+      <div className="muted">Tools: {(entry.tools ?? []).join(", ") || "None"}</div>
+      <span className="chips">
+        {(entry.record_ids ?? []).map((id) => (
+          <CitationChip key={id} id={id} />
+        ))}
+      </span>
+    </div>
+  );
+}
+
+function Changes() {
+  const [values, set] = useQueryFilters(["kind"] as const);
+  const result = useLoad(getChanges, "changes");
+  if (result.state === "not_found") notFound();
+  const label = (Object.keys(KINDS) as KindLabel[]).find((k) => KINDS[k] === values.kind) ?? "All";
+
+  return (
+    <>
+      <div className="page-head">
+        <div>
+          <h1>Changes</h1>
+          <p>An append-only log of reassignments and questions asked. Entries cannot be edited or deleted.</p>
+        </div>
+        <SegmentedControl label="Show" options={Object.keys(KINDS)} value={label} onChange={(v) => set("kind", KINDS[v as KindLabel])} />
+      </div>
+      {result.state === "loading" && <LoadingSkeleton blocks={1} label="Loading the change log" />}
+      {result.state === "error" && <ErrorState message={result.message} onRetry={result.reload} />}
+      {result.state === "ready" &&
+        (() => {
+          const rows = result.data.changes.filter((c) => !values.kind || c.type === values.kind);
+          if (rows.length === 0)
+            return (
+              <Empty
+                title="No entries yet"
+                description="Reassignments and questions asked in your scope appear here. The log starts empty when the server starts."
+              />
+            );
+          return (
+            <DataTable
+              caption="Change log, newest first"
+              columns={["When", "Who", "Role", "Kind", "What", "Details"]}
+              rows={rows.map((c) => [
+                formatDateTime(c.at),
+                c.user_name ?? c.user_id,
+                c.user_role ? ROLE_LABELS[c.user_role] : "",
+                c.type === "reassignment" ? "Reassignment" : "Question asked",
+                <span key="what" className={c.type === "ask" ? "mono" : undefined}>
+                  {c.summary}
+                </span>,
+                <Details key="details" entry={c} />,
+              ])}
+            />
+          );
+        })()}
+    </>
+  );
+}
+
+export default function ChangesPage() {
+  return (
+    <AppShell>
+      <Suspense fallback={<LoadingSkeleton blocks={1} label="Loading the change log" />}>
+        <Changes />
+      </Suspense>
+    </AppShell>
+  );
+}
