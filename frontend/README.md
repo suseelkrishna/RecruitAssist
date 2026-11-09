@@ -27,7 +27,17 @@ npm run dev            # http://localhost:3000, with the backend on http://local
 ```bash
 npm run typecheck
 npm run lint
+npm test               # component tests (Vitest and Testing Library in jsdom)
 ```
+
+The Playwright smoke tests start the backend (recorded answers only, no API key) and the dev server, or reuse ones already running on ports 8000 and 3000. They pick each demo user, open every page the role allows, check that the others show not found, ask one suggested question against a stubbed `/api/ask`, and complete one reassignment.
+
+```bash
+npx playwright install chromium   # once
+npm run e2e
+```
+
+`PW_REPORT_DIR` and `PW_OUTPUT_DIR` move the HTML report and test output, for example outside the repo. `PLAYWRIGHT_CHROMIUM_PATH` points at an already installed Chromium instead of the bundled one.
 
 ## Pages
 
@@ -38,3 +48,8 @@ npm run lint
 | `/ask` | Questions to the assistant, with verified, cited answers | `GET /api/me`, `POST /api/ask` |
 | `/jobs` | The jobs in scope, with filters kept in the URL | `GET /api/jobs` |
 | `/jobs/[id]` | One job: funnel, ranked candidates, top 3, tasks, and reassignment | `GET /api/jobs/{id}`, `POST /api/jobs/{id}/assignment` |
+| `/tasks` | Pending and overdue tasks, grouped by team (Admin) or recruiter (HR Manager), explicit or derived | `GET /api/tasks` |
+| `/candidates/[applicationId]` | The full evidence for one application, the same view as the Ask drawer | `GET /api/candidates/{id}` |
+| `/sources` | Live checks, integrations (marked Simulated), and candidate sources. Admin and HR Manager | `GET /api/sources`, `GET /api/health` |
+| `/changes` | The append-only change log of reassignments and questions. Admin and HR Manager | `GET /api/changes` |
+| `/quality` | Test counts, mutation score, access matrix, and the eval scoreboard, when reports exist | `GET /api/quality` |
