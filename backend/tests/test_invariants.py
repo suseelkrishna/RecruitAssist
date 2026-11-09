@@ -173,7 +173,7 @@ def test_every_team_has_one_manager(db):
 def test_users_and_roles(db):
     users = {r["name"]: r["role"] for r in db.execute("SELECT name, role FROM users")}
     assert users == {
-        "Morgan Lee": "admin", "Priya Raman": "hr_manager", "Daniel Okafor": "hr_manager",
+        "Suseel Maddali": "admin", "Priya Raman": "hr_manager", "Daniel Okafor": "hr_manager",
         "Sam Rivera": "hr_user", "Alex Chen": "hr_user", "Jordan Patel": "hr_user",
     }
     teams = {(r[0], r[1]) for r in db.execute(

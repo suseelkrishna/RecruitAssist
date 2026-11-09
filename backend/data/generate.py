@@ -29,7 +29,7 @@ from pathlib import Path
 
 SEED = 42
 DEFAULT_AS_OF = "2026-11-09T17:00:00Z"
-GENERATOR_VERSION = "1.1.0"
+GENERATOR_VERSION = "1.2.0"
 TS_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
 DATA_DIR = Path(__file__).resolve().parent
@@ -74,7 +74,7 @@ TEAMS = [
 ]
 
 USERS = [
-    ("USR-1", "Morgan Lee", "morgan.lee@example.com", "admin"),
+    ("USR-1", "Suseel Maddali", "suseel.maddali@example.com", "admin"),
     ("USR-2", "Priya Raman", "priya.raman@example.com", "hr_manager"),
     ("USR-3", "Daniel Okafor", "daniel.okafor@example.com", "hr_manager"),
     ("USR-4", "Sam Rivera", "sam.rivera@example.com", "hr_user"),
