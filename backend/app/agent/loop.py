@@ -33,8 +33,9 @@ from app.agent.prompt import SYSTEM_PROMPT
 from app.agent.verify import ID_RE, verify
 from app.logic import scope
 
-DEFAULT_MODEL = "claude-opus-5-5"
-DEFAULT_EFFORT = "medium"
+# Chosen by the evals: see evals/results.md for the scores and the rule used to pick it.
+DEFAULT_MODEL = "claude-haiku-5-5"
+DEFAULT_EFFORT = "low"
 MAX_ROUNDS = 6
 MAX_HISTORY_PAIRS = 6
 MAX_HISTORY_ANSWER_CHARS = 1500
@@ -64,6 +65,11 @@ def model_name() -> str:
     return os.environ.get("ANTHROPIC_MODEL") or DEFAULT_MODEL
 
 
+def effort_level() -> str:
+    """The effort to use: ANTHROPIC_EFFORT, or the default."""
+    return os.environ.get("ANTHROPIC_EFFORT") or DEFAULT_EFFORT
+
+
 def make_client() -> anthropic.AsyncAnthropic:
     """An async Messages API client with a request timeout. The SDK retries 429 and 5xx itself."""
     return anthropic.AsyncAnthropic(timeout=REQUEST_TIMEOUT_SECONDS, max_retries=MAX_RETRIES)
@@ -71,10 +77,15 @@ def make_client() -> anthropic.AsyncAnthropic:
 
 async def run_agent(question: str, principal: Principal, job_id: str | None = None,
                     history: list[dict[str, str]] | None = None, model: str | None = None,
-                    client: Any = None) -> dict[str, Any]:
-    """Answer one question for one principal and return the full, verified result."""
+                    client: Any = None, effort: str | None = None) -> dict[str, Any]:
+    """Answer one question for one principal and return the full, verified result.
+
+    model and effort default to ANTHROPIC_MODEL and ANTHROPIC_EFFORT. The evals pass both
+    explicitly so several settings can run side by side in one process.
+    """
     started = time.monotonic()
     model = model or model_name()
+    effort = effort or effort_level()
     client = client or make_client()
     run: dict[str, Any] = {"steps": [], "outputs": [], "usage": empty_usage(), "served_by": None}
     token = access.current_principal.set(principal)
@@ -84,13 +95,13 @@ async def run_agent(question: str, principal: Principal, job_id: str | None = No
             tools = await tool_specs(session)
             messages: list[dict[str, Any]] = [
                 {"role": "user", "content": user_turn(question, context, job_id, history or [])}]
-            answer, status = await converse(client, model, tools, messages, session, run)
+            answer, status = await converse(client, model, effort, tools, messages, session, run)
             report = verify(answer, run["outputs"], context, question)
             retried = False
             if status == "answered" and not report["passed"]:
                 retried = True
                 messages.append({"role": "user", "content": retry_note(report)})
-                answer, status = await converse(client, model, tools, messages, session, run)
+                answer, status = await converse(client, model, effort, tools, messages, session, run)
                 report = verify(answer, run["outputs"], context, question)
     finally:
         access.current_principal.reset(token)
@@ -106,6 +117,7 @@ async def run_agent(question: str, principal: Principal, job_id: str | None = No
         "latency_ms": round((time.monotonic() - started) * 1000),
         "estimated_cost_usd": estimated_cost(model, run["usage"]),
         "model": model,
+        "effort": effort,
         "served_by": run["served_by"],
         "retried": retried,
         "verifier": report,
@@ -145,7 +157,8 @@ def user_turn(question: str, context: dict[str, Any], job_id: str | None,
     return "\n\n".join(parts)
 
 
-def request(model: str, tools: list[dict[str, Any]], messages: list[dict[str, Any]]) -> dict[str, Any]:
+def request(model: str, tools: list[dict[str, Any]], messages: list[dict[str, Any]],
+            effort: str = DEFAULT_EFFORT) -> dict[str, Any]:
     """The Messages API arguments for one round.
 
     The cache breakpoint after the system prompt caches tools and system; the top-level
@@ -160,7 +173,7 @@ def request(model: str, tools: list[dict[str, Any]], messages: list[dict[str, An
         "tool_choice": {"type": "auto"},
         "messages": messages,
         "thinking": {"type": "adaptive"},
-        "output_config": {"effort": os.environ.get("ANTHROPIC_EFFORT") or DEFAULT_EFFORT},
+        "output_config": {"effort": effort},
         "cache_control": {"type": "ephemeral"},
     }
     if model in FALLBACK_MODELS:
@@ -169,15 +182,15 @@ def request(model: str, tools: list[dict[str, Any]], messages: list[dict[str, An
     return params
 
 
-async def converse(client: Any, model: str, tools: list[dict[str, Any]], messages: list[dict[str, Any]],
-                   session: Client, run: dict[str, Any]) -> tuple[str, str]:
+async def converse(client: Any, model: str, effort: str, tools: list[dict[str, Any]],
+                   messages: list[dict[str, Any]], session: Client, run: dict[str, Any]) -> tuple[str, str]:
     """Call the model and run its tools until it answers or MAX_ROUNDS calls are used.
 
     Returns the answer text and a status: answered, truncated (max_tokens), refused, or
     round_limit. Every assistant turn is kept unchanged, thinking blocks included.
     """
     for _ in range(MAX_ROUNDS):
-        response = await client.beta.messages.create(**request(model, tools, messages))
+        response = await client.beta.messages.create(**request(model, tools, messages, effort))
         add_usage(run["usage"], response.usage)
         run["served_by"] = getattr(response, "model", model)
         messages.append({"role": "assistant", "content": response.content})
