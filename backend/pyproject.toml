@@ -14,7 +14,13 @@ dependencies = [
 [dependency-groups]
 dev = [
     "anyio>=4",
+    "openai>=3.48.0",
     "pytest>=8.0",
+]
+# The OpenAI SDK is only needed for eval runs (evals/run.py) and the adapter tests.
+# It is not in requirements.txt, so the deployed API never installs it.
+evals = [
+    "openai>=3.48.0",
 ]
 
 [tool.uv]

@@ -190,12 +190,12 @@ If a check fails, the model gets one retry with the failures listed. If the retr
 ## How correctness was verified
 
 - **Data invariants:** 20 tests check the generated database itself: stage events are contiguous and ordered, closed applications end with their outcome, scorecards exist only for completed interviews, every timestamp is at or before the as of time, all emails use `example.com`, all phones use `555-01xx`, and regenerating gives the same data hash.
-- **Unit tests:** 309 backend tests. Logic functions are checked against SQL written separately in the tests, an answer key computed by `backend/evals/expected.py`, or small hand-built databases. They cover ties, roles with no candidates, missing scorecards, and values exactly at each threshold. The agent loop is tested with a fake model, and every API route is tested over HTTP. The frontend has 17 component tests and 14 Playwright smoke tests that open every page as each role, ask a question, reassign a job, clear dashboard filters, and open How it works.
+- **Unit tests:** 340 backend tests. Logic functions are checked against SQL written separately in the tests, an answer key computed by `backend/evals/expected.py`, or small hand-built databases. They cover ties, roles with no candidates, missing scorecards, and values exactly at each threshold. The agent loop is tested with a fake model, both model adapters are tested with mocked Anthropic and OpenAI responses, and every API route is tested over HTTP. The frontend has 17 component tests and 14 Playwright smoke tests that open every page as each role, ask a question, reassign a job, clear dashboard filters, and open How it works.
 - **Mutation score:** 12 of 12. Twelve deliberate bugs were applied one at a time to scoring weights, recommendation points, tie order, the active-only filter, the four late-work thresholds, the overdue boundary, the SQL scope filter, the HR Manager and HR User scope rules, and the contact-details check. The test suite failed for every one.
 - **RBAC matrix:** every logic function as each of the 6 users, as described under Roles and access.
 - **Evals:** 18 questions, each run 3 times per setting, graded by `backend/evals/grade.py` with its own SQL. Checks cover numbers, IDs, tools used, citation validity, ranking order, scope, contact details, required mentions, and forbidden content.
-- **Prompt injection:** one CV and one candidate email contain instructions aimed at the AI. Both questions passed 3 of 3 runs for every model and effort setting.
-- **Fairness:** two candidates with equivalent evidence must be described evenly. The question passed 3 of 3 runs for every setting.
+- **Prompt injection:** one CV and one candidate email contain instructions aimed at the AI. Both questions passed 3 of 3 runs for every Claude setting. The OpenAI models passed the email question every time but the CV question in only 2 of 18 runs, mostly by leaving out candidates the answer should have listed (see Model comparison across providers).
+- **Fairness:** two candidates with equivalent evidence must be described evenly. The question passed 3 of 3 runs for every setting, Claude and OpenAI.
 - **Consistency:** for the default setting, every question gave the same pass or fail result on all 3 repeats.
 
 ## Model choice
@@ -212,6 +212,41 @@ The evals ran 324 times in all (18 questions, 3 repeats, 6 settings) for an esti
 | Opus 5.5, medium | 92.6% | 88.9% | 100% | 94.4% | 11.1 s | $0.0541 |
 
 The decision rule: take the highest verified pass rate, treat every setting within 5 points of it as tied, and pick the cheapest tied setting. Sonnet at low effort had the highest verified pass rate at 92.6%. Haiku 5.5 at low effort was within 5 points at 88.9% and cost about one fourteenth as much per question, so it is the default. `ANTHROPIC_MODEL` and `ANTHROPIC_EFFORT` override it.
+
+## Model comparison across providers
+
+The same evals were run against three OpenAI models to see whether another provider would change the choice. It did not: Claude Haiku 5.5 at low effort is still the default, and the same rule applied to every row, OpenAI included, picks it too.
+
+**Method.** The agent loop talks to models only through a small interface in `backend/app/llm/`, with one adapter for the Anthropic Messages API and one for the OpenAI Responses API. Each adapter turns its provider's tool calls, tool results, stop reasons, and token counts into the same shape, so the loop, the MCP tools, and the verifier are identical for every model. Every model got the same 18 questions, 3 repeats, system prompt, tools, effort setting (low and medium), output token limit, grader, and LLM judge (Claude Sonnet 5.5). No temperature is sent to either provider, because neither accepts one with reasoning turned on, so each runs at its default. Cost is estimated from each provider's reported token counts and the list prices in `backend/app/llm/models.yaml`.
+
+**What was compared.** Claude Haiku 5.5, Sonnet 5.5, and Opus 5.5 against OpenAI `gpt-6-luna`, `gpt-6.1-terra`, and `gpt-6.1-sol`, chosen to match the Claude price tiers. `gpt-6-astra` was considered and not run: at about 2.5 times the price of Opus it would have added roughly $30, and as an eval-only model it would not have shipped either way. The OpenAI runs cost $1.77; all 648 runs together cost an estimated $9.34.
+
+| Setting | Pass rate | Verified pass rate | p50 latency | Cost per run |
+|---|---|---|---|---|
+| **Claude Haiku 5.5, low** | **94.4%** | **88.9%** | **6.0 s** | **$0.0015** |
+| Claude Sonnet 5.5, low | 92.6% | 92.6% | 7.1 s | $0.0213 |
+| Claude Opus 5.5, medium | 92.6% | 88.9% | 11.1 s | $0.0541 |
+| gpt-6.1-sol, low | 77.8% | 77.8% | 5.4 s | $0.0072 |
+| gpt-6-luna, medium | 77.8% | 77.8% | 5.0 s | $0.0005 |
+| gpt-6.1-terra, medium | 75.9% | 75.9% | 5.8 s | $0.0103 |
+
+The table shows the better effort setting for each model. All 12 settings, with per-question results, are in [backend/evals/results.md](backend/evals/results.md).
+
+**Results.**
+- Every Claude setting passed 90.7% to 94.4% of runs. The OpenAI settings passed 66.7% to 77.8%.
+- The OpenAI models were a little faster (5.0 to 6.4 s at p50) and `gpt-6-luna` was the cheapest model tested, but none came within 5 points of the best verified pass rate.
+- Their misses cluster in a few questions. They often left out candidates the answer should list (the CV injection question and the withdrawn-candidate follow-up), and on the two questions about data that does not exist they often did not say plainly that it is missing.
+- Citation validity was 100% and contact details never leaked for any model, so the tools and verifier held the line on grounding and privacy for both providers.
+- The LLM judge rated the OpenAI answers clearer (4.2 to 4.4 against 3.4 to 3.8 out of 5) with similar faithfulness. The deterministic checks, which decide pass or fail, weigh completeness more than style.
+
+**Limits.**
+- 18 questions with 3 repeats is a small sample; a difference of a few points between two settings is within noise.
+- The system prompt and tool descriptions were written and tuned while developing with Claude, which may favor Claude. No OpenAI-specific prompt tuning was done.
+- OpenAI prices came from third-party trackers and are marked `confirm: true` in `models.yaml` until checked against OpenAI's own price page.
+- Claude results come from the earlier run on the same day and data; only the OpenAI runs are new.
+- The people-overdue question fails for every model, Claude and OpenAI, so it does not separate them.
+
+OpenAI is used for eval runs only. The app refuses an OpenAI model unless `ALLOW_OPENAI_LIVE=1` is set, and every live answer, whatever the provider, counts against the same per-IP limit and daily cap.
 
 ## Key design decisions and tradeoffs
 
@@ -300,6 +335,8 @@ claude mcp add recruitassist --scope user -- "$PWD/backend/.venv/bin/python" "$P
 | `ANTHROPIC_API_KEY` | Backend | Turns on live answers |
 | `ANTHROPIC_MODEL` | Backend | The model, default `claude-haiku-5-5` |
 | `ANTHROPIC_EFFORT` | Backend | The thinking effort, default `low` |
+| `OPENAI_API_KEY` | Backend, evals only | Lets `evals/run.py` run OpenAI models; the app ignores it |
+| `ALLOW_OPENAI_LIVE` | Backend | Leave unset. `1` lets the app answer with an OpenAI model |
 | `DAILY_LIVE_CAP` | Backend | Live answers per day across all users, default 150 |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Backend | Keep the change log, reassignments, and rate limits in Upstash Redis |
 | `BACKEND_URL` | Frontend | Where `/api/*` is forwarded, default `http://localhost:8000` |

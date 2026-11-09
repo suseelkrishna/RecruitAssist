@@ -8,7 +8,9 @@ are written to evals_out/ (ignored by git).
 
 Usage (from backend/):
     uv run python evals/run.py --estimate                  measure one question per setting, print the projected cost
-    uv run python evals/run.py                              the full matrix (3 models x 2 efforts x 3 repeats)
+    uv run python evals/run.py                              the full matrix (every eval: true model in
+                                                            app/llm/models.yaml x 2 efforts x 3 repeats)
+    uv run python evals/run.py --models claude-haiku-5-5 gpt-6-luna      compare models across providers
     uv run python evals/run.py --models claude-haiku-5-5 --repeats 1 --questions process-top3
     uv run python evals/run.py --judge claude-sonnet-5-5   add LLM judge scores for the first repeat
     uv run python evals/run.py --from-runs evals_out/<stamp>/runs.jsonl    regrade and report without API calls
@@ -34,10 +36,9 @@ from typing import Any
 BACKEND = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BACKEND))
 
-import anthropic  # noqa: E402
 import yaml  # noqa: E402
 
-from app import access, store  # noqa: E402
+from app import access, llm, store  # noqa: E402
 from app.agent import loop, recordings  # noqa: E402
 from app.env import load_env_file  # noqa: E402
 from evals import expected, grade, judge, report  # noqa: E402
@@ -46,7 +47,7 @@ QUESTIONS = BACKEND / "evals" / "questions.yaml"
 SCOREBOARD = BACKEND / "evals" / "scoreboard.json"
 RESULTS = BACKEND / "evals" / "results.md"
 OUT_DIR = BACKEND / "evals_out"
-MODELS = ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5"]
+MODELS = llm.eval_models()
 EFFORTS = ["low", "medium"]
 REPEATS = 3
 CONCURRENCY = 6
@@ -75,10 +76,6 @@ def load_questions(only: list[str] | None = None) -> dict[str, Any]:
     return data
 
 
-# API errors that retrying cannot fix, such as an exhausted credit balance or a bad key.
-FATAL_ERRORS = (anthropic.BadRequestError, anthropic.AuthenticationError, anthropic.PermissionDeniedError)
-
-
 def root_error(error: BaseException) -> BaseException:
     """The first underlying error inside nested exception groups (the MCP client wraps errors in them)."""
     while isinstance(error, BaseExceptionGroup) and error.exceptions:
@@ -97,9 +94,10 @@ async def ask(client: Any, question: dict[str, Any], model: str, effort: str) ->
     except Exception as group:  # Recorded and graded as a failed run so one error does not stop the matrix.
         error = root_error(group)
         return {"answer": "", "status": "error", "error": f"{type(error).__name__}: {error}",
-                "fatal": isinstance(error, FATAL_ERRORS),
+                "fatal": isinstance(error, llm.LLMAPIError) and error.fatal,
                 "verified": False, "steps": [], "usage": loop.empty_usage(), "estimated_cost_usd": 0.0,
-                "latency_ms": round((time.monotonic() - started) * 1000), "model": model, "effort": effort}
+                "latency_ms": round((time.monotonic() - started) * 1000), "model": model, "effort": effort,
+                "provider": llm.provider_for(model)}
 
 
 async def run_matrix(questions: list[dict[str, Any]], models: list[str], efforts: list[str], repeats: int,
@@ -107,12 +105,14 @@ async def run_matrix(questions: list[dict[str, Any]], models: list[str], efforts
                      out_file: Path, done: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     """Run every question for every model, effort, and repeat, grading each run as it finishes.
 
-    Runs go out at most `concurrency` at a time. Once the estimated spend reaches the
+    Every model gets the same questions, prompts, tools, effort, and output token limit; only
+    the provider adapter differs. Runs go out at most `concurrency` at a time. Once the estimated spend reaches the
     budget, or an API error that retrying cannot fix occurs, no new run starts and the
     failing run is not kept. Runs already in `done` are kept and not repeated. Each graded
     run is appended to out_file as one JSON line.
     """
-    client = loop.make_client()
+    clients = {m: loop.make_client(m, "eval") for m in models}
+    judge_client = loop.make_client(judge_model, "eval") if judge_model else None
     gate = asyncio.Semaphore(concurrency)
     spent = {"usd": 0.0}
     stop: list[str] = []
@@ -124,17 +124,18 @@ async def run_matrix(questions: list[dict[str, Any]], models: list[str], efforts
             async with gate:
                 if spent["usd"] >= budget or stop or (q["id"], model, effort, repeat) in finished:
                     return
-                result = await ask(client, q, model, effort)
+                result = await ask(clients[model], q, model, effort)
                 if result.get("fatal"):
-                    stop.append(result["error"])
+                    stop.append(f"{model}: {result['error']}")
                     return
                 spent["usd"] += result.get("estimated_cost_usd") or 0.0
                 scope = expected.scope_jobs(con, q["user"])
-                row = {"question_id": q["id"], "user": q["user"], "model": model, "effort": effort,
+                row = {"question_id": q["id"], "user": q["user"], "model": model,
+                       "provider": llm.provider_for(model), "effort": effort,
                        "repeat": repeat, "result": result, "grade": grade.grade(q, result, scope, con)}
                 if judge_model and repeat < judge_repeats and result.get("answer"):
                     try:
-                        row["judge"] = await judge.judge(client, judge_model, q, result["answer"])
+                        row["judge"] = await judge.judge(judge_client, judge_model, q, result["answer"])
                     except Exception as error:  # A judge failure leaves the run graded without scores.
                         row["judge"] = {"scores": None, "error": str(error)}
                 graded.append(row)
@@ -150,11 +151,24 @@ async def run_matrix(questions: list[dict[str, Any]], models: list[str], efforts
         print(f"Stopped starting new runs at the ${budget:.2f} budget.", flush=True)
     if stop:
         print(f"Stopped on an API error that retrying cannot fix: {stop[0]}", flush=True)
+    errors = sum(r["result"].get("status") == "error" for r in graded)
+    if errors:
+        print(f"{errors} runs failed with an API error. --resume runs them again.", flush=True)
     return graded
 
 
-def estimate(runs: list[dict[str, Any]], questions: int, repeats: int, judge_model: str | None) -> float:
-    """Print the projected cost of the full matrix from one measured question per setting."""
+def estimate(runs: list[dict[str, Any]], questions: int, repeats: int, judge_model: str | None) -> float | None:
+    """Print the projected cost of the full matrix from one measured question per setting.
+
+    Returns None, with the errors printed, when any measured run failed with an API error,
+    because a failed run costs nothing and would make the projection look free.
+    """
+    failed = [r for r in runs if r["result"].get("status") == "error"]
+    if failed or not runs:
+        print("\nNo projection: these settings failed with an API error.")
+        for r in failed:
+            print(f"  {r['model']} {r['effort']}: {r['result'].get('error')}")
+        return None
     total = 0.0
     print(f"\nProjected cost for {questions} questions x {repeats} repeats:")
     for r in runs:
@@ -174,7 +188,8 @@ def write_outputs(runs: list[dict[str, Any]], data: dict[str, Any]) -> dict[str,
             "as_of": data["as_of"], "data_hash": data["data_hash"],
             "questions": len({r["question_id"] for r in runs}),
             "repeats": max(r["repeat"] for r in runs) + 1}
-    board = report.scoreboard(runs, meta)
+    board = report.scoreboard(runs, meta, skipped={m: r for m, r in llm.skipped_models().items()
+                                                   if m not in {r["model"] for r in runs}})
     report.write_reports(board, data["questions"], runs, SCOREBOARD, RESULTS)
     print(f"Wrote {RESULTS.relative_to(BACKEND)} and {SCOREBOARD.relative_to(BACKEND)}. "
           f"Default: {board['default']}")
@@ -194,7 +209,7 @@ def regrade(path: Path, data: dict[str, Any]) -> list[dict[str, Any]]:
 
 async def rejudge(runs: list[dict[str, Any]], data: dict[str, Any], judge_model: str) -> None:
     """Replace the judge scores on runs that were judged before, for example after a rubric change."""
-    client = loop.make_client()
+    client = loop.make_client(judge_model, "eval")
     by_id = {q["id"]: q for q in data["questions"]}
     targets = [r for r in runs if r.get("judge") and r["result"].get("answer")]
     gate = asyncio.Semaphore(CONCURRENCY)
@@ -219,7 +234,7 @@ async def record(model: str, effort: str) -> None:
     still a better fallback than no answer. An API error stops recording and leaves the
     recordings saved so far in place.
     """
-    client = loop.make_client()
+    client = loop.make_client(model)  # Recordings back the app, so OpenAI is refused here like in the app.
     wanted = {(c, u["user_id"], None) for u in access.demo_users() for c in CHIPS[u["role"]]}
     wanted |= {(r["question"], r["user_id"], r.get("job_id")) for r in recordings.load()}
     total = 0.0
@@ -236,6 +251,15 @@ async def record(model: str, effort: str) -> None:
         recordings.save(question, user_id, job_id, sorted(principal.allowed_job_ids), result, store.now())
         print(f"{user_id} {question!r}: {result['label']} after {attempt} attempt(s), total ${total:.2f}",
               flush=True)
+
+
+def missing_keys(models: list[str]) -> list[str]:
+    """The API key variables the given models need that are not set. Unknown model IDs stop the run."""
+    try:
+        needed = {llm.api_key_env(m) for m in models}
+    except ValueError as error:
+        raise SystemExit(str(error)) from None
+    return sorted(k for k in needed if not os.environ.get(k))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -257,6 +281,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     load_env_file()
+    missing = missing_keys(args.models + ([args.judge] if args.judge else []))
+    if missing and not args.from_runs:
+        raise SystemExit("Set these keys in backend/.env first: " + ", ".join(missing))
     # The evals score the seed data, so job assignments must not come from a shared Redis store.
     os.environ.pop("UPSTASH_REDIS_REST_URL", None)
     data = load_questions(args.questions)
@@ -283,8 +310,8 @@ def main(argv: list[str] | None = None) -> int:
         sample = [q for q in data["questions"] if q["id"] == ESTIMATE_QUESTION] or data["questions"][:1]
         runs = asyncio.run(run_matrix(sample, args.models, args.efforts, 1, args.concurrency, args.budget,
                                       None, 0, out_file))
-        estimate(runs, len(load_questions(None)["questions"]), args.repeats, args.judge)
-        return 0
+        projected = estimate(runs, len(load_questions(None)["questions"]), args.repeats, args.judge)
+        return 0 if projected is not None else 1
     runs = asyncio.run(run_matrix(data["questions"], args.models, args.efforts, args.repeats,
                                   args.concurrency, args.budget, args.judge, args.judge_repeats, out_file, done))
     print(f"Raw runs: {out_file.relative_to(BACKEND)}")

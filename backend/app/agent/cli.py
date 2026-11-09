@@ -17,7 +17,7 @@ import json
 import os
 import sys
 
-from app import access, store
+from app import access, llm, store
 from app.agent import loop, recordings
 from app.env import load_env_file
 
@@ -38,11 +38,18 @@ def main(argv: list[str] | None = None) -> int:
     except LookupError as error:
         print(error, file=sys.stderr)
         return 2
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        print("ANTHROPIC_API_KEY is not set. Add it to backend/.env or the environment to ask live questions.",
-              file=sys.stderr)
+    model = args.model or loop.model_name()
+    try:
+        key_env = llm.api_key_env(model)
+        if not os.environ.get(key_env):
+            print(f"{key_env} is not set. Add it to backend/.env or the environment to ask live questions.",
+                  file=sys.stderr)
+            return 2
+        client = loop.make_client(model)
+    except ValueError as error:  # Unknown model, or an OpenAI model without ALLOW_OPENAI_LIVE=1.
+        print(error, file=sys.stderr)
         return 2
-    result = asyncio.run(loop.run_agent(args.question, principal, job_id=args.job, model=args.model))
+    result = asyncio.run(loop.run_agent(args.question, principal, job_id=args.job, model=model, client=client))
     if args.record:
         recordings.save(args.question, args.user, args.job, sorted(principal.allowed_job_ids), result, store.now())
     print(json.dumps(result, indent=2) if args.json else summary(result, principal))

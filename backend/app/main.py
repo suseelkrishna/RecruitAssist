@@ -19,7 +19,6 @@ import hashlib
 import os
 from typing import Annotated, Any
 
-import anthropic
 from fastapi import Depends, FastAPI, Header, HTTPException, Path, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -27,7 +26,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app import access, checks, quality, store
+from app import access, checks, llm, quality, store
 from app.access import Principal
 from app.agent import loop, recordings
 from app.env import load_env_file
@@ -128,8 +127,18 @@ def principal(x_demo_user: Annotated[str | None, Header()] = None) -> Principal:
 
 
 def model_client() -> Any:
-    """The Messages API client, or None when no API key is set (answers then come from recordings)."""
-    return loop.make_client() if os.environ.get("ANTHROPIC_API_KEY") else None
+    """The LLM client for the configured model, or None when its provider's API key is not set or
+    the model is an OpenAI model without ALLOW_OPENAI_LIVE=1 (answers then come from recordings).
+
+    Whatever the provider, every live answer goes through /api/ask, so the per-IP limit and
+    the DAILY_LIVE_CAP counter (in Redis when configured) apply to it."""
+    model = loop.model_name()
+    try:
+        if not os.environ.get(llm.api_key_env(model)):
+            return None
+        return loop.make_client(model)
+    except ValueError:  # Unknown model, or OpenAI not allowed live.
+        return None
 
 
 User = Annotated[Principal, Depends(principal)]
@@ -252,7 +261,7 @@ async def ask(user: User, body: AskBody, request: Request,
         try:
             result = await loop.run_agent(body.question, user, job_id=body.job_id, history=history,
                                           client=client)
-        except anthropic.APIError:
+        except llm.LLMAPIError:
             result = None
     if result is None:
         result = recordings.find(body.question, user.user_id, body.job_id, sorted(user.allowed_job_ids))
