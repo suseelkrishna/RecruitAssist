@@ -31,8 +31,9 @@ from app import access, checks, quality, store
 from app.access import Principal
 from app.agent import loop, recordings
 from app.env import load_env_file
-from app.logic import analytics, assignments, evidence, scope, sources, tasks
+from app.logic import analytics, assignments, changelog, evidence, scope, sources, tasks
 from app.logic.common import NotAllowedError, OutOfScopeError, require_job
+from app.logic.common import out_of_scope as not_in_scope
 
 load_env_file()
 
@@ -135,9 +136,9 @@ User = Annotated[Principal, Depends(principal)]
 
 
 @app.get("/api/health")
-def health() -> dict[str, str]:
-    """A liveness check that needs no user."""
-    return {"status": "ok"}
+def health() -> dict[str, Any]:
+    """Public liveness check with the live checks: database, model API (cached), and store."""
+    return {"status": "ok", "checks": checks.live_checks()}
 
 
 @app.get("/api/users")
@@ -190,8 +191,8 @@ def reassign(user: User, job_id: JobId, body: AssignmentBody) -> dict[str, Any]:
 def pending(user: User,
             owner: Annotated[str | None, Query(pattern=r"^USR-\d+$")] = None,
             job: Annotated[str | None, Query(pattern=r"^JOB-\d+$")] = None) -> dict[str, Any]:
-    """Open and derived tasks in scope, most overdue first."""
-    return tasks.pending_tasks(user, owner_user_id=owner, job_id=job)
+    """Open and derived tasks in scope, most overdue first, grouped for the role."""
+    return tasks.task_board(user, owner_user_id=owner, job_id=job)
 
 
 @app.get("/api/candidates/{application_id}")
@@ -200,18 +201,29 @@ def candidate(user: User, application_id: ApplicationId) -> dict[str, Any]:
     return evidence.get_candidate_evidence(user, application_id)
 
 
+def require_role(user: Principal, roles: tuple[str, ...], page: str) -> None:
+    """404 for a role that may not open this page, the same answer as an out-of-scope ID."""
+    if user.role not in roles:
+        raise not_in_scope(page)
+
+
 @app.get("/api/sources")
 def source_health(user: User) -> dict[str, Any]:
-    """Integration health, source quality for the user's scope, and the live checks."""
-    return {"integrations": sources.integration_health()["integrations"],
-            "source_quality": analytics.source_quality(user),
-            "checks": checks.live_checks()}
+    """Integration health and source quality. admin sees the full integration rows, hr_manager
+    a read-only summary, and hr_user gets a 404."""
+    require_role(user, ("admin", "hr_manager"), "/api/sources")
+    rows = sources.integration_health()["integrations"]
+    full = user.role == "admin"
+    return {"integrations_view": "full" if full else "summary",
+            "integrations": rows if full else sources.integration_summary(rows),
+            "source_quality": analytics.source_quality(user)}
 
 
 @app.get("/api/changes")
 def changes(user: User) -> dict[str, Any]:
-    """The change log entries the user may see, newest first."""
-    return {"changes": store.list_changes(user)}
+    """The change log entries the user may see, newest first. admin and hr_manager only."""
+    require_role(user, ("admin", "hr_manager"), "/api/changes")
+    return changelog.change_log(user)
 
 
 @app.get("/api/quality")

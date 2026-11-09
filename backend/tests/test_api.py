@@ -84,7 +84,8 @@ def test_missing_user_on_ask_and_assignment_gets_401(client):
 
 
 def test_health_and_users_are_public(client):
-    assert client.get("/api/health").json() == {"status": "ok"}
+    health = client.get("/api/health").json()
+    assert health["status"] == "ok" and [c["name"] for c in health["checks"]] == ["Database", "Model API", "Store"]
     users = client.get("/api/users").json()["users"]
     assert [u["user_id"] for u in users] == USERS
     assert all(set(u) == {"user_id", "name", "role"} for u in users)
@@ -139,13 +140,22 @@ def test_dashboard_filters_are_scoped_and_validated(client):
     assert bad.status_code == 422 and bad.json()["details"][0]["field"] == "from"
 
 
-def test_sources_include_live_checks(client, monkeypatch):
+def test_health_includes_live_checks(client, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.setattr(main.checks, "_model_check", {})
-    body = client.get("/api/sources", headers=as_user("USR-4")).json()
+    body = client.get("/api/health").json()
     assert [c["name"] for c in body["checks"]] == ["Database", "Model API", "Store"]
     assert body["checks"][1]["status"] == "not_configured"
-    assert body["integrations"] and body["source_quality"]["metric"] == "source_quality"
+
+
+def test_sources_are_full_for_admin_summary_for_managers_and_hidden_from_hr_users(client):
+    admin = client.get("/api/sources", headers=as_user("USR-1")).json()
+    assert admin["integrations_view"] == "full" and "error_rate_24h_pct" in admin["integrations"][0]
+    assert admin["source_quality"]["metric"] == "source_quality"
+    manager = client.get("/api/sources", headers=as_user("USR-2")).json()
+    assert manager["integrations_view"] == "summary"
+    assert all(set(i) == {"integration", "status", "last_sync", "mode", "simulated"} for i in manager["integrations"])
+    assert client.get("/api/sources", headers=as_user("USR-4")).status_code == 404
 
 
 def test_errors_are_friendly_json(client, monkeypatch):
@@ -218,9 +228,8 @@ def test_change_log_is_scoped(client):
     assert seen("USR-1") == ["JOB-3"]
     assert seen("USR-3") == ["JOB-3"]    # manages TEAM-3
     assert seen("USR-2") == []           # does not
-    assert seen("USR-5") == ["JOB-3"]    # now owns it
-    assert seen("USR-6") == ["JOB-3"]    # it was moved away from them
-    assert seen("USR-4") == []
+    # The changes page is for admin and hr_manager; HR Users get a 404.
+    assert all(client.get("/api/changes", headers=as_user(u)).status_code == 404 for u in ("USR-4", "USR-5", "USR-6"))
 
 
 # Ask
@@ -231,8 +240,8 @@ def test_ask_runs_the_agent_and_logs_no_question_text(client):
     body = response.json()
     assert response.status_code == 200
     assert body["answer"] == "You can see 3 jobs." and body["source"] == "live" and body["verified"]
-    change = client.get("/api/changes", headers=as_user("USR-4")).json()["changes"][0]
-    assert change["type"] == "ask" and change["tools"] == ["list_jobs"] and len(change["question_sha256"]) == 64
+    change = client.get("/api/changes", headers=as_user("USR-1")).json()["changes"][0]
+    assert change["type"] == "ask" and change["user_id"] == "USR-4" and change["tools"] == ["list_jobs"] and len(change["question_sha256"]) == 64
     assert "How many" not in str(change)
 
 

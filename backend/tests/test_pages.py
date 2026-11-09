@@ -166,3 +166,47 @@ def test_me_summary_counts_jobs_candidates_and_overdue(client, db, user_id):
                         jobs).fetchone()[0]
     overdue = client.get("/api/tasks", headers=as_user(user_id)).json()["overdue_count"]
     assert body["summary"] == {"jobs": len(jobs), "active_candidates": active, "overdue_tasks": overdue}
+
+
+# Tasks page
+
+def test_hr_user_sees_only_their_own_tasks_in_one_group(client):
+    body = client.get("/api/tasks", headers=as_user("USR-4")).json()
+    assert body["group_by"] == "none" and len(body["groups"]) == 1
+    assert body["tasks"] and all(t["owner_user_id"] == "USR-4" for t in body["tasks"])
+
+
+def test_manager_tasks_are_grouped_by_owner_and_admin_by_team(client, db):
+    manager = client.get("/api/tasks", headers=as_user("USR-2")).json()
+    assert manager["group_by"] == "owner"
+    for group in manager["groups"]:
+        assert {t["owner_user_id"] or "unassigned" for t in group["tasks"]} == {group["key"]}
+        assert group["count"] == len(group["tasks"])
+        assert group["overdue_count"] == sum(t["status"] == "overdue" for t in group["tasks"])
+    admin = client.get("/api/tasks", headers=as_user("USR-1")).json()
+    assert admin["group_by"] == "team"
+    for group in admin["groups"]:
+        teams = {db.execute("SELECT team_id FROM jobs WHERE job_id = ?", (t["job_id"],)).fetchone()[0]
+                 for t in group["tasks"]}
+        assert teams == {group["key"]}
+    assert sum(g["count"] for g in admin["groups"]) == admin["count"]
+
+
+def test_tasks_say_explicit_or_derived_with_the_rule_text(client):
+    for task in client.get("/api/tasks", headers=as_user("USR-1")).json()["tasks"]:
+        if task.get("rule_id"):
+            assert task["kind"] == "derived" and task["rule_text"].endswith(".")
+        else:
+            assert task["kind"] == "explicit" and task["task_id"].startswith("TASK-")
+            assert (task["rule_text"] is None) == ("matched_rule_id" not in task)
+
+
+# Changes page
+
+def test_change_log_names_who_and_what(client):
+    client.post("/api/jobs/JOB-2/assignment", headers=as_user("USR-2"),
+                json={"recruiter_user_id": "USR-4", "reason": "Balancing load"})
+    entry = client.get("/api/changes", headers=as_user("USR-1")).json()["changes"][0]
+    assert entry["user_name"] == "Priya Raman" and entry["user_role"] == "hr_manager"
+    assert entry["summary"] == "JOB-2 recruiter: Alex Chen to Sam Rivera"
+    assert entry["reason"] == "Balancing load"
