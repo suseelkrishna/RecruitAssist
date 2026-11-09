@@ -297,6 +297,22 @@ test("an InfoTip opens on a tap and closes on a tap outside", async ({ browser }
   await context.close();
 });
 
+test("an InfoTip card opens next to its icon and stays inside the window", async ({ page }) => {
+  await pickUser(page, "Alex Chen, HR User");
+  await page.goto("/tasks");
+  await expect(page.getByRole("heading", { name: "Rules for derived tasks" })).toBeVisible();
+  const icon = page.getByRole("button", { name: "About Tasks" });
+  await icon.click();
+  const card = page.getByRole("dialog", { name: "Tasks" });
+  await expect(card).toContainText("Overdue and pending work, most overdue first.");
+  const i = (await icon.boundingBox())!;
+  // The kit animates the card in, so wait for it to settle beside the icon.
+  await expect.poll(async () => Math.abs((await card.boundingBox())!.x - i.x)).toBeLessThanOrEqual(24);
+  const c = (await card.boundingBox())!;
+  expect(c.x).toBeGreaterThanOrEqual(0);
+  expect(c.x + c.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+});
+
 test("an HR Manager reassigns a job and the change log records it", async ({ page }) => {
   await pickUser(page, "Priya Raman, HR Manager");
   await page.goto("/jobs/JOB-2");
