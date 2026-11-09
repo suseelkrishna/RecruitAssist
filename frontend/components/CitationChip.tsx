@@ -15,7 +15,7 @@ export function CitationChip({ id }: { id: string }) {
     return (
       <Drawer
         title={`Evidence for ${id}`}
-        description="Stage timeline, CV excerpt, scorecards, and emails. Contact details are masked."
+        description="Contact details are masked."
         trigger={
           <button type="button" className="chip" aria-label={`Open evidence for ${id}`}>
             {id}

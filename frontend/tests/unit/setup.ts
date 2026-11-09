@@ -29,4 +29,6 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   document.cookie = "demo_user=; path=/; max-age=0";
+  window.localStorage.clear();
+  window.history.replaceState(null, "", "/");
 });

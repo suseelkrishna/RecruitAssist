@@ -16,6 +16,7 @@ import { getHealth, getSources } from "@/lib/api";
 import { formatDateTime, show } from "@/lib/format";
 import type { Integration, LiveCheck } from "@/lib/types";
 import { useLoad } from "@/lib/useLoad";
+import { HeadingWithInfo } from "@/components/HeadingWithInfo";
 
 const INTEGRATION_TONE: Record<Integration["status"], StatusTone> = { Healthy: "success", Degraded: "warning", Down: "danger" };
 
@@ -29,7 +30,8 @@ const CHECK_LABEL: Record<LiveCheck["status"], [StatusTone, string]> = {
 function LiveChecks() {
   const health = useLoad(getHealth, "health");
   return (
-    <Card title="Live checks" description="Checked when this page loads. The model API result is cached for 10 minutes.">
+    <Card>
+      <HeadingWithInfo as="h3" title="Live checks" info="Checked when this page loads. The model API result is cached for 10 minutes." />
       <Badge tone="success">Live</Badge>
       {health.state === "loading" && <p role="status">Checking</p>}
       {(health.state === "error" || health.state === "not_found") && <p>The live checks could not be loaded.</p>}
@@ -98,8 +100,7 @@ export default function SourcesPage() {
     <AppShell>
       <div className="page-head">
         <div>
-          <h1>Sources</h1>
-          <p>The systems the data syncs through, and where applicants come from.</p>
+          <HeadingWithInfo as="h1" title="Sources" info="The systems the data syncs through, and where applicants come from." />
         </div>
       </div>
       {result.state === "loading" && <LoadingSkeleton blocks={4} label="Loading sources" />}
@@ -108,12 +109,15 @@ export default function SourcesPage() {
         <Stack gap={24} className="fade-in">
           <LiveChecks />
           <section aria-labelledby="integrations">
-            <h2 id="integrations">Integrations</h2>
-            <p className="muted">
-              {result.data.integrations_view === "full"
-                ? "These values are generated, not synced from real systems, so each card is marked Simulated."
-                : "A read-only summary. These values are generated, not synced from real systems, so each card is marked Simulated."}
-            </p>
+            <HeadingWithInfo
+              id="integrations"
+              title="Integrations"
+              info={
+                result.data.integrations_view === "full"
+                  ? "These values are generated, not synced from real systems, so each card is marked Simulated."
+                  : "A read-only summary. These values are generated, not synced from real systems, so each card is marked Simulated."
+              }
+            />
             {result.data.integrations.length === 0 ? (
               <Empty title="No integrations" description="No integration has synced yet." />
             ) : (
@@ -125,8 +129,8 @@ export default function SourcesPage() {
             )}
           </section>
           <section aria-labelledby="candidate-sources">
-            <h2 id="candidate-sources">Candidate sources</h2>
-            <p className="muted">{result.data.source_quality.takeaway} These are real counts from the database.</p>
+            <HeadingWithInfo id="candidate-sources" title="Candidate sources" info="Real counts from the database, for the jobs in your scope." />
+            <p className="muted">{result.data.source_quality.takeaway}</p>
             {result.data.source_quality.sources.length === 0 ? (
               <Empty title="No applicants yet" description="No applications in your scope have a source." />
             ) : (

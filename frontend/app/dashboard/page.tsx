@@ -27,6 +27,7 @@ import { getDashboard } from "@/lib/api";
 import { useQueryFilters } from "@/lib/query";
 import type { DashboardResponse } from "@/lib/types";
 import { useLoad } from "@/lib/useLoad";
+import { HeadingWithInfo } from "@/components/HeadingWithInfo";
 
 const FILTERS = ["team", "job", "recruiter", "days"] as const;
 
@@ -80,8 +81,7 @@ function FullDashboard() {
     <>
       <div className="page-head">
         <div>
-          <h1>Full dashboard</h1>
-          <p>Every number here comes from the database for the jobs in your scope.</p>
+          <HeadingWithInfo as="h1" title="Full dashboard" info="Every number here comes from the database, for the jobs in your scope." />
         </div>
         <Link href="/dashboard" className="link-button">
           Back to catch-up

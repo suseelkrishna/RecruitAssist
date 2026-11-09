@@ -278,7 +278,8 @@ export type AskResult = {
   verified: boolean;
   label: string;
   citations: string[];
-  steps: AskStep[];
+  /** Admin only. For other roles the API leaves out steps, usage, cost, and the verifier report. */
+  steps?: AskStep[];
   usage?: {
     api_calls: number;
     input_tokens: number;
@@ -297,9 +298,27 @@ export type AskResult = {
   source: "live" | "recording";
   recording_reason?: "live_limit" | "live_unavailable";
   recorded_at?: string;
+  /** Set when the question was asked into a saved conversation. */
+  conversation_id?: string;
+  turn_id?: string;
 };
 
-export type AskBody = { question: string; job_id?: string };
+/** One earlier finished turn sent with a follow-up question, so the assistant has the context. */
+export type AskHistoryItem = { question: string; answer: string; citations: string[] };
+
+export type AskBody = { question: string; job_id?: string; history?: AskHistoryItem[]; conversation_id?: string };
+
+/** A saved conversation as the list shows it. */
+export type Conversation = { id: string; title: string; created_at: string; updated_at: string; turn_count: number };
+
+/** GET /api/conversations. storage ("memory" or "redis") is sent to admin only. */
+export type ConversationsResponse = { conversations: Conversation[]; storage?: "memory" | "redis" };
+
+/** One saved turn: the answer fields of an AskResult plus when it was asked and its question. */
+export type StoredTurn = AskResult & { turn_id: string; at: string; question: string };
+
+/** GET /api/conversations/{id}: the conversation and its turns, oldest first. */
+export type ConversationDetail = Conversation & { turns: StoredTurn[] };
 
 export type BoardTask = Task & { team_id: string; team: string; kind: "explicit" | "derived"; rule_text: string | null };
 
@@ -358,9 +377,13 @@ export type ChangesResponse = { changes: ChangeEntry[] };
 export type QualityResponse = {
   tests_defined: number;
   tests: unknown;
-  mutation_score: unknown;
   rbac: unknown;
+  mutation: unknown;
   scoreboard: unknown;
   generated_at: string | null;
+  git_commit: string | null;
+  git_dirty: boolean | null;
+  /** The names of the reports that are not produced yet, each with a plain reason in reasons. */
   missing: string[];
+  reasons: Record<string, string>;
 };

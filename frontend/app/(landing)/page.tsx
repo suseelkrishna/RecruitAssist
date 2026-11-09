@@ -17,6 +17,7 @@ import { ROLE_LABELS } from "@/lib/roles";
 import type { DemoUser, Role } from "@/lib/types";
 import { useLoad } from "@/lib/useLoad";
 import { setDemoUser } from "@/lib/user";
+import { HeadingWithInfo } from "@/components/HeadingWithInfo";
 
 const ROLE_ORDER: Role[] = ["admin", "hr_manager", "hr_user"];
 
@@ -54,11 +55,14 @@ export default function LandingPage() {
       <main className="landing-panel fade-in" id="content">
         <Logo size={48} />
         <h1>RecruitAssist</h1>
-        <p className="landing-tagline">Ask your hiring pipeline anything. Every number comes from the data.</p>
+        <p className="landing-tagline">Ask your hiring pipeline anything.</p>
 
-        <h2 id="pick" className="landing-pick">
-          Choose a demo user
-        </h2>
+        <HeadingWithInfo
+          id="pick"
+          className="landing-pick"
+          title="Choose a demo user"
+          info="A fictional company, Northbeam Robotics. There are no passwords; switching users is a demo feature, not sign-in."
+        />
         {users.state === "loading" && (
           <p role="status" className="muted">
             Loading demo users
@@ -80,9 +84,6 @@ export default function LandingPage() {
           </ul>
         )}
 
-        <p className="landing-note">
-          A fictional company, Northbeam Robotics. No passwords; switching users is a demo feature.
-        </p>
         <HowItWorks />
       </main>
       <Footer />

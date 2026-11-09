@@ -38,7 +38,6 @@ function Jobs() {
       <div className="page-head">
         <div>
           <h1>Jobs</h1>
-          <p>The jobs in your scope.</p>
         </div>
       </div>
       {result.state === "loading" && <LoadingSkeleton blocks={1} label="Loading jobs" />}

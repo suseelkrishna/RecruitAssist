@@ -41,7 +41,7 @@ export function ReassignForm({ job, onDone }: { job: JobDetail; onDone: (updated
       <Field label="Reassign to">
         <Select value={recruiter} onChange={(e) => setRecruiter(e.target.value)} options={job.reassign_options.map((o) => ({ label: o.name, value: o.user_id }))} />
       </Field>
-      <Field label="Reason (optional)" hint="Shown in the change log. Up to 300 characters.">
+      <Field label="Reason (optional)">
         <Textarea value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} rows={2} />
       </Field>
       {error && (

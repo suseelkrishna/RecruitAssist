@@ -21,6 +21,7 @@ import { getJob } from "@/lib/api";
 import { formatDate, show } from "@/lib/format";
 import type { JobDetail, RankedCandidate, ScoreComponent } from "@/lib/types";
 import { useLoad } from "@/lib/useLoad";
+import { HeadingWithInfo } from "@/components/HeadingWithInfo";
 
 /** One row of the score breakdown: the component and the points it earned out of its maximum. */
 function Component({ label, part, detail }: { label: string; part: ScoreComponent; detail: string }) {
@@ -54,7 +55,8 @@ function rubricText(job: JobDetail): string {
 /** The top 3 candidates, each with scorecards, must-have match, and stage reached. */
 function TopThree({ job }: { job: JobDetail }) {
   return (
-    <Card title="Top 3" description={rubricText(job)}>
+    <Card>
+      <HeadingWithInfo as="h3" title="Top 3" info={rubricText(job)} />
       {job.top_3.length === 0 ? (
         <p className="muted">No active candidates to rank.</p>
       ) : (
@@ -154,7 +156,8 @@ function JobPage({ job, onReassigned }: { job: JobDetail; onReassigned: (message
         </Card>
       </div>
 
-      <Card title="Funnel" description="Applications that reached each stage, with rejections and withdrawals.">
+      <Card>
+        <HeadingWithInfo as="h3" title="Funnel" info="Applications that reached each stage, with rejections and withdrawals." />
         {job.funnel[0]?.reached ? (
           <div className="chart-box" role="img" aria-label={job.funnel.map((s) => `${s.stage}: ${s.reached} reached`).join(", ")}>
             <ResponsiveContainer>
@@ -177,7 +180,8 @@ function JobPage({ job, onReassigned }: { job: JobDetail; onReassigned: (message
 
       <TopThree job={job} />
 
-      <Card title="Candidates" description={`${job.candidate_pool} active candidates, ranked by score.`}>
+      <Card>
+        <HeadingWithInfo as="h3" title="Candidates" info="Active candidates, ranked by the same score as the Top 3." />
         {job.candidates.length === 0 ? (
           <Empty title="No active candidates" description="This job has no active applications." />
         ) : (
@@ -196,7 +200,8 @@ function JobPage({ job, onReassigned }: { job: JobDetail; onReassigned: (message
         )}
       </Card>
 
-      <Card title="Tasks" description="Open tasks on this job, most overdue first.">
+      <Card>
+        <HeadingWithInfo as="h3" title="Tasks" info="Open tasks on this job, most overdue first." />
         {job.tasks.length === 0 ? (
           <Empty title="No open tasks" description="Nothing is pending or overdue on this job." />
         ) : (

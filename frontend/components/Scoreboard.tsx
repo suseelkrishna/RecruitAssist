@@ -35,15 +35,21 @@ export function isScoreboard(value: unknown): value is ScoreboardReport {
   return !!value && typeof value === "object" && Array.isArray((value as ScoreboardReport).settings);
 }
 
+/** How to read the scoreboard and how the default model is chosen, for the InfoTip after its title. */
+export function scoreboardInfo(report: ScoreboardReport): string {
+  const repeats =
+    report.questions !== undefined && report.repeats !== undefined
+      ? `${report.questions} questions, each asked ${report.repeats} times per setting. `
+      : "";
+  return `${repeats}Judge scores run from 1 to 5.${report.default_rule ? ` How the default is chosen: ${report.default_rule}` : ""}`;
+}
+
 export function Scoreboard({ report }: { report: ScoreboardReport }) {
   const settings = report.settings ?? [];
   const isDefault = (s: ScoreboardSetting) => report.default?.model === s.model && report.default?.effort === s.effort;
   return (
     <div>
       <p className="muted" style={{ marginTop: 0 }}>
-        {report.questions !== undefined && report.repeats !== undefined
-          ? `${report.questions} questions, each asked ${report.repeats} times per setting. `
-          : ""}
         Run {formatDateTime(report.generated_at)}.
         {report.default ? ` The app uses ${report.default.model} at ${report.default.effort} effort.` : ""}
       </p>
@@ -68,11 +74,6 @@ export function Scoreboard({ report }: { report: ScoreboardReport }) {
           s.llm_judge ? `${show(s.llm_judge.faithfulness)} / ${show(s.llm_judge.clarity)}` : "Not judged",
         ])}
       />
-      {report.default_rule && (
-        <p className="muted" style={{ fontSize: "0.875rem", marginBottom: 0 }}>
-          Judge scores run from 1 to 5. How the default is chosen: {report.default_rule}
-        </p>
-      )}
     </div>
   );
 }

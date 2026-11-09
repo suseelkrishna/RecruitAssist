@@ -20,7 +20,7 @@ const ALL: (NavItem & { roles: Role[] })[] = [
   { href: "/tasks", label: "Tasks", roles: ["admin", "hr_manager", "hr_user"] },
   { href: "/sources", label: "Sources", roles: ["admin", "hr_manager"] },
   { href: "/changes", label: "Changes", roles: ["admin", "hr_manager"] },
-  { href: "/quality", label: "Quality", roles: ["admin", "hr_manager", "hr_user"] },
+  { href: "/quality", label: "Quality", roles: ["admin"] },
 ];
 
 /** The left navigation items this role may use, in display order. */

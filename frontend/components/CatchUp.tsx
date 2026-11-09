@@ -129,7 +129,6 @@ export function CatchUp() {
       <div id={panelId} className="catchup-panel" role="region" aria-label={openTile ? openTile.label : "Tile details"} onKeyDown={onPanelKey}>
         {open === "overdue_tasks" && <OverduePanel data={data} />}
         {open && open !== "overdue_tasks" && <ChartPanel open={open} />}
-        {!open && <p className="muted catchup-hint">Choose a tile to see the chart or list behind it.</p>}
       </div>
     </div>
   );
