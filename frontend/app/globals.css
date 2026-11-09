@@ -752,8 +752,8 @@ span.chip {
 
 .info-tip .ff-button {
   min-height: 0;
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   padding: 0;
   border-radius: 50%;
   font-size: 0;
@@ -766,8 +766,8 @@ span.chip {
 
 .info-tip .ff-button > span::before {
   content: "i";
-  font-size: 13px;
-  font-style: italic;
+  font-size: 12px;
+  font-style: normal;
   font-weight: 700;
   line-height: 1;
 }
@@ -1036,4 +1036,43 @@ span.chip {
 .session-more {
   flex: 0 0 auto;
   letter-spacing: 0.1em;
+}
+
+/* The InfoTip card: a compact tip for one or two sentences. Only InfoTip uses the kit's
+   HoverInfoCard, so these overrides apply to it alone. The title repeats the heading the tip
+   sits after, so it is hidden visually but still names the card for screen readers. */
+
+.ff-popover.ff-hover-info {
+  width: max-content;
+  max-width: min(280px, calc(100vw - 32px));
+  padding: 10px 36px 10px 14px;
+  border-radius: var(--ff-radius-sm);
+}
+
+.ff-popover.ff-hover-info > strong {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.ff-popover.ff-hover-info > div {
+  margin-top: 0;
+  line-height: 1.5;
+}
+
+.ff-popover.ff-hover-info > button {
+  top: 4px;
+  right: 4px;
+}
+
+/* The kit centers the card under the (i). On wider screens, shift it so its left edge lines
+   up with the icon and it reads as part of the heading; on phones it stays centered so it
+   never runs off screen. */
+@media (min-width: 641px) {
+  .ff-popover.ff-hover-info {
+    translate: calc(50% - 10px) 0;
+  }
 }
