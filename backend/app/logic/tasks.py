@@ -24,6 +24,7 @@ from app import db
 from app.access import Principal, current_recruiters
 from app.logic.common import (IN_SCOPE, add_business_days, days_between, format_ts, parse_ts,
                               require_job, resolve_as_of, scope_params)
+from app.logic.sources import degraded_sources
 
 RULES = {
     "RULE-SCORECARD-48H": "A completed interview has no scorecard more than 48 hours later.",
@@ -31,6 +32,9 @@ RULES = {
     "RULE-STAGE-7D": "An active application has been in the same stage for more than 7 days.",
     "RULE-OFFER-5D": "An offer has had no response for more than 5 days.",
 }
+
+# The records the task list is built from; a degraded integration feeding any of them is reported.
+TASK_RECORDS = {"applications and stages", "scorecards", "interview schedules", "candidate emails"}
 
 # The explicit task type that covers the same work as each rule.
 RULE_TASK_TYPE = {"RULE-SCORECARD-48H": "scorecard", "RULE-REPLY-2BD": "reply",
@@ -66,12 +70,15 @@ def pending_tasks(principal: Principal, owner_user_id: str | None = None, job_id
         item["owner_name"] = users.get(item["owner_user_id"])
     items.sort(key=lambda i: (-i["days_overdue"], i["due_at"], i.get("task_id") or i["rule_id"],
                               i["evidence"]))
+    degraded = degraded_sources(TASK_RECORDS, as_of)
     return {
         "as_of": as_of,
         "count": len(items),
         "overdue_count": sum(1 for i in items if i["status"] == "overdue"),
         "tasks": items,
         "rules": RULES,
+        "degraded_sources": degraded,
+        "warnings": [d["warning"] for d in degraded],
     }
 
 

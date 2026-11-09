@@ -30,7 +30,7 @@ from app import access, checks, llm, quality, store
 from app.access import Principal
 from app.agent import loop, recordings
 from app.env import load_env_file
-from app.logic import analytics, assignments, changelog, evidence, scope, sources, tasks
+from app.logic import analytics, assignments, catchup, changelog, evidence, scope, sources, tasks
 from app.logic.common import NotAllowedError, OutOfScopeError, require_job
 from app.logic.common import out_of_scope as not_in_scope
 
@@ -163,6 +163,12 @@ def me(user: User) -> dict[str, Any]:
     return {"user": {"user_id": user.user_id, "name": user.name, "role": user.role},
             "allowed_job_ids": sorted(user.allowed_job_ids), "team_ids": sorted(user.team_ids),
             "summary": scope.scope_summary(card), "scope": card}
+
+
+@app.get("/api/catch-up")
+def catch_up(user: User) -> dict[str, Any]:
+    """The catch-up page: a greeting, one line on what needs attention, and headline tiles."""
+    return catchup.catch_up(user)
 
 
 @app.get("/api/dashboard")

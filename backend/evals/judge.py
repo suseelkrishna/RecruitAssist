@@ -12,7 +12,6 @@ import re
 from pathlib import Path
 from typing import Any
 
-import yaml
 
 RUBRIC = (Path(__file__).resolve().parent / "judge_rubric.md").read_text()
 JUDGE_EFFORT = "low"
@@ -23,7 +22,7 @@ def judge_prompt(question: dict[str, Any], answer: str) -> str:
     parts = [f"Question: {question['question']}"]
     for pair in question.get("history") or []:
         parts.append(f"Earlier question: {pair['question']}\nEarlier answer: {pair['answer']}")
-    parts.append("Answer key:\n" + yaml.safe_dump(question["expected"], sort_keys=False, width=100))
+    parts.append("Answer key:\n" + json.dumps(question["expected"], indent=2, ensure_ascii=False))
     parts.append("A good answer:\n" + "\n".join(f"- {m}" for m in question["must"]))
     parts.append(f"Answer to grade:\n{answer}")
     return "\n\n".join(parts)

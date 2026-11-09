@@ -8,7 +8,6 @@ dependencies = [
     "fastapi>=0.162.2",
     "mcp==2.3.0",
     "pydantic>=2",
-    "pyyaml>=6.0",
 ]
 
 [dependency-groups]
@@ -26,7 +25,6 @@ evals = [
 [tool.uv]
 package = false
 
-# Vercel loads the FastAPI app from app/main.py. Naming it here keeps the older
-# server.py at the project root from being picked as the entrypoint.
+# Vercel loads the FastAPI app from app/main.py, named here so the entrypoint is explicit.
 [tool.vercel]
 entrypoint = "app.main:app"

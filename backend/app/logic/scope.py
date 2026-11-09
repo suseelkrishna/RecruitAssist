@@ -11,7 +11,8 @@ from app.logic.tasks import pending_tasks
 
 
 def list_jobs(principal: Principal, as_of: str | None = None) -> dict[str, Any]:
-    """Every job in scope with team, status, recruiter, days open, target, and active applications."""
+    """Every job in scope with team, status, recruiter, days open, target, and active applications,
+    plus the total of active applications across them, so an answer never has to add them up."""
     as_of = resolve_as_of(as_of)
     jobs = db.rows(f"""
         SELECT j.job_id, j.req_code, j.title, t.team_id, t.name AS team, j.location, j.status,
@@ -26,7 +27,8 @@ def list_jobs(principal: Principal, as_of: str | None = None) -> dict[str, Any]:
         job["days_open"] = round(days_between(job["opened_at"], job["closed_at"] or as_of), 1)
         job["recruiter_user_id"] = recruiters.get(job["job_id"])
         job["recruiter_name"] = users.get(job["recruiter_user_id"])
-    return {"as_of": as_of, "count": len(jobs), "jobs": jobs}
+    return {"as_of": as_of, "count": len(jobs), "jobs": jobs,
+            "active_applications_total": sum(j["active_applications"] for j in jobs)}
 
 
 def scope_card(principal: Principal, job_id: str | None = None, as_of: str | None = None) -> dict[str, Any]:
@@ -56,7 +58,8 @@ def scope_card(principal: Principal, job_id: str | None = None, as_of: str | Non
             "active_candidates": [[a["application_id"], a["full_name"]] for a in mine],
         })
     overdue = pending_tasks(principal, job_id=job_id, as_of=as_of)["overdue_count"]
-    return {"as_of": as_of, "role": principal.role, "jobs": cards, "overdue_items": overdue,
+    return {"as_of": as_of, "role": principal.role, "jobs": cards,
+            "active_candidates_total": sum(len(c["active_candidates"]) for c in cards), "overdue_items": overdue,
             "note": "active_candidates lists [application_id, name] for active applications only."}
 
 

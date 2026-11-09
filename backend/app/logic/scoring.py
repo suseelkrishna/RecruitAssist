@@ -17,6 +17,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from app import db
 from app.access import Principal
 from app.logic.common import IN_SCOPE, STAGES, require_job, resolve_as_of, scope_params
+from app.logic.sources import degraded_sources
 
 RUBRIC_VERSION = "v1"
 WEIGHTS = {"scorecards": 0.5, "must_have": 0.3, "stage": 0.2}
@@ -79,6 +80,7 @@ def score_candidates(principal: Principal, job_id: str, top_n: int = 3,
     scored = [{"rank": rank, **entry} for rank, entry in enumerate(scored, start=1)]
     top = scored[:top_n]
 
+    degraded = degraded_sources({"applications and stages", "scorecards"}, as_of)
     return {
         "job_id": job_id,
         "title": job["title"],
@@ -88,8 +90,9 @@ def score_candidates(principal: Principal, job_id: str, top_n: int = 3,
         "pool_size": len(scored),
         "ranked": top,
         "warnings": [f"{s['application_id']} has incomplete evidence: {'; '.join(s['missing'])}"
-                     for s in top if s["incomplete_evidence"]],
+                     for s in top if s["incomplete_evidence"]] + [d["warning"] for d in degraded],
         "missing": [] if scored else [f"{job_id} has no active applications."],
+        "degraded_sources": degraded,
     }
 
 

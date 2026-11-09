@@ -88,3 +88,32 @@ def integration_summary(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """The read-only integration summary an hr_manager sees: status and last sync, without
     record counts, error rates, or error messages."""
     return [{k: r[k] for k in SUMMARY_FIELDS} for r in rows]
+
+
+# The records each integration feeds. A tool that reads these records reports the integration
+# when it is not Healthy, so an answer built on the data can say why some of it may be missing.
+FEEDS = {
+    "Greenhouse (ATS)": "applications and stages",
+    "Interview notes": "scorecards",
+    "Google Calendar": "interview schedules",
+    "Email": "candidate emails",
+}
+
+
+def degraded_sources(records: set[str], as_of: str | None = None) -> list[dict[str, Any]]:
+    """The integrations that feed any of `records` and are Degraded or Down, each with the
+    records it affects and a one-line warning. Error rates and messages are left out, because
+    every role sees this, and the full detail stays on the Sources page."""
+    rows = integration_health(as_of)["integrations"]
+    found = []
+    for row in rows:
+        feeds = FEEDS.get(row["integration"])
+        if row["status"] == "Healthy" or feeds not in records:
+            continue
+        found.append({
+            "integration": row["integration"], "status": row["status"], "affects": feeds,
+            "last_sync": row["last_sync"],
+            "warning": (f"The {row['integration']} integration is {row['status'].lower()}, "
+                        f"so some {feeds} may be missing or out of date."),
+        })
+    return found

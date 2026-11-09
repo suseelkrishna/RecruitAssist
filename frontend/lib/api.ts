@@ -8,6 +8,7 @@ import { clearDemoUser, getDemoUser } from "@/lib/user";
 import type {
   AskBody,
   AskResult,
+  CatchUpResponse,
   ChangesResponse,
   DashboardFilters,
   DashboardResponse,
@@ -79,6 +80,11 @@ export function getUsers(): Promise<UsersResponse> {
 /** GET /api/me: who the current demo user is, their role, and their scope. */
 export function getMe(): Promise<MeResponse> {
   return request("/api/me");
+}
+
+/** GET /api/catch-up: the greeting, one-line summary, and headline tiles for the user's scope. */
+export function getCatchUp(): Promise<CatchUpResponse> {
+  return request("/api/catch-up");
 }
 
 /** GET /api/dashboard: every dashboard metric for the filters, in one call. */

@@ -118,7 +118,7 @@ def scoreboard(runs: list[dict[str, Any]], meta: dict[str, Any],
     """The full scoreboard: one row per model and effort, the chosen default, and run metadata.
 
     The default is chosen only from models the app may ship (production: true in
-    app/llm/models.yaml), so OpenAI rows are compared but never picked. best_overall applies
+    app/llm/models.json), so OpenAI rows are compared but never picked. best_overall applies
     the same rule to every row, so the report can say when another provider would have won.
     """
     groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
@@ -210,7 +210,7 @@ def results_markdown(board: dict[str, Any], questions: list[dict[str, Any]],
         "its one retry. Consistency: questions where all repeats gave the same pass or fail result. "
         "Tokens are per run (one question); tokens in include cache writes and cache reads, and tokens "
         "out include thinking or reasoning tokens. Cache hit rate: API calls that read from the prompt "
-        "cache. Cost per run: estimated at the list prices in `app/llm/models.yaml`.",
+        "cache. Cost per run: estimated at the list prices in `app/llm/models.json`.",
         "",
         "## Checks",
         "",
@@ -235,7 +235,7 @@ def results_markdown(board: dict[str, Any], questions: list[dict[str, Any]],
         lines += ["", "## Prices to confirm", "",
                   "These prices came from third-party trackers, not the provider's own price page, so the "
                   "cost columns for these models are provisional: "
-                  + ", ".join(f"`{m}`" for m in board["prices_to_confirm"]) + ". See `app/llm/models.yaml`."]
+                  + ", ".join(f"`{m}`" for m in board["prices_to_confirm"]) + ". See `app/llm/models.json`."]
     lines += ["", "## Per question", "", "Passed runs out of runs for each setting.", "",
               "| Question | User | " + " | ".join(names) + " |", "|---|---|" + "---|" * len(names)]
     for q in questions:

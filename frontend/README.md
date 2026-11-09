@@ -30,7 +30,7 @@ npm run lint
 npm test               # component tests (Vitest and Testing Library in jsdom)
 ```
 
-The Playwright smoke tests start the backend (recorded answers only, no API key) and the dev server, or reuse ones already running on ports 8000 and 3000. They pick each demo user, open every page the role allows, check that the others show not found, ask one suggested question against a stubbed `/api/ask`, and complete one reassignment.
+The Playwright smoke tests start the backend (recorded answers only, no API key) and the dev server, or reuse ones already running on ports 8000 and 3000. They pick each demo user, open every page the role allows, check that the others show not found, open the catch-up tiles from the keyboard at 1280 and 390 pixels wide, open the full dashboard, ask one suggested question against a stubbed `/api/ask`, and complete one reassignment.
 
 ```bash
 npx playwright install chromium   # once
@@ -44,7 +44,8 @@ npm run e2e
 | Path | What it shows | API |
 | --- | --- | --- |
 | `/` | The RecruitAssist mark, one line on what it does, and the demo users to pick from. How it works opens in a drawer | `GET /api/users` |
-| `/dashboard` | Filters, headline numbers, and eight charts, each with a table view | `GET /api/dashboard` |
+| `/dashboard` | The catch-up view: a greeting, one line on what needs attention, and five tiles that open their chart or task list on click | `GET /api/catch-up`, then `GET /api/dashboard` when a chart tile opens |
+| `/dashboard?view=full` | The full dashboard: filters, headline numbers, and eight charts, each with a table view | `GET /api/dashboard` |
 | `/ask` | Questions to the assistant, with verified, cited answers | `GET /api/me`, `POST /api/ask` |
 | `/jobs` | The jobs in scope, with filters kept in the URL | `GET /api/jobs` |
 | `/jobs/[id]` | One job: funnel, ranked candidates, top 3, tasks, and reassignment | `GET /api/jobs/{id}`, `POST /api/jobs/{id}/assignment` |

@@ -50,7 +50,8 @@ def principal() -> access.Principal:
 
 def list_jobs() -> dict[str, Any]:
     """List the jobs you can see: ID, title, team, status, recruiter, days open, target days,
-    and active applications. Start here to find job IDs."""
+    and active applications, plus active_applications_total across them. Start here to find
+    job IDs."""
     return scope.list_jobs(principal())
 
 
@@ -104,7 +105,9 @@ def pending_tasks(owner_user_id: UserId | None = None, job_id: JobId | None = No
     Each item has status (pending or overdue), days_overdue, owner, either a
     task_id or a rule_id, and evidence IDs. Derived rules: scorecard missing
     over 48 hours, inbound email unanswered over 2 business days, same stage
-    over 7 days, offer unanswered over 5 days.
+    over 7 days, offer unanswered over 5 days. degraded_sources and warnings name
+    any integration feeding this data that is not Healthy, which can explain
+    missing scorecards or emails.
     """
     return tasks.pending_tasks(principal(), owner_user_id, job_id)
 

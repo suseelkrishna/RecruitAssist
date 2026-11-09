@@ -1,4 +1,4 @@
-"""Checks that the committed data carries each eval scenario, and that questions.yaml is current.
+"""Checks that the committed data carries each eval scenario, and that questions.json is current.
 
 The expected answers come from evals/expected.py. These tests assert the
 properties each scenario is meant to have, so a change to the generator that
@@ -7,10 +7,10 @@ breaks a scenario fails here instead of silently weakening an eval.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
-import yaml
 
 from evals import expected
 
@@ -28,9 +28,9 @@ def by_id(questions: dict, qid: str) -> dict:
     return next(q["expected"] for q in questions["questions"] if q["id"] == qid)
 
 
-def test_questions_yaml_is_up_to_date(questions):
-    assert QUESTIONS_PATH.read_text() == expected.to_yaml(questions)
-    assert yaml.safe_load(QUESTIONS_PATH.read_text())["data_hash"] == questions["data_hash"]
+def test_questions_json_is_up_to_date(questions):
+    assert QUESTIONS_PATH.read_text() == expected.to_json(questions)
+    assert json.loads(QUESTIONS_PATH.read_text())["data_hash"] == questions["data_hash"]
 
 
 def test_controls_leak(questions):

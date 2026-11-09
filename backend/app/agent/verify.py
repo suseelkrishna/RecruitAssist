@@ -3,7 +3,8 @@
 Four checks, each deterministic:
   numbers    every number and date in the answer appears in the tool outputs (or the
              question). Rounding is allowed, a fraction may be stated as a percent, and a
-             sentence that declares a sum or a percentage may combine grounded numbers.
+             sentence that declares a sum or a percentage may combine grounded numbers. A
+             total worked out that way may also be repeated elsewhere in the answer.
   citations  every record ID in the answer was returned by a tool.
   ranking    any ranked list follows the score_candidates order.
   pii        no unmasked email address or phone number appears.
@@ -97,19 +98,38 @@ def matches(value: float, pool: set[float]) -> bool:
     return any(round(abs(x), places) == target for x in pool)
 
 
+def declared_sums(sentences: list[str], pool: set[float]) -> set[float]:
+    """Totals the answer works out in the open: in a sentence with a sum word or a plus sign,
+    a number that equals the sum of the other grounded numbers there. Such a total may then
+    appear elsewhere in the answer, for example as a headline before the working is shown."""
+    totals: set[float] = set()
+    for sentence in sentences:
+        if not SUM_WORDS.search(sentence):
+            continue
+        numbers = scan(sentence)[0]
+        grounded = [n for n in numbers if matches(n, pool)]
+        for n in numbers:
+            others = [g for g in grounded if g != n]
+            if n not in grounded and others and matches(n, {sum(others)}):
+                totals.add(n)
+    return totals
+
+
 def check_numbers(answer: str, pool: set[float], dates: set[str]) -> dict[str, Any]:
     """Every number and date in the answer must be grounded in the pool, or be a declared sum or
     simple percentage of grounded numbers in the same sentence."""
     unsupported: list[str] = []
     checked = 0
-    for sentence in SENTENCE_RE.split(LIST_MARKER_RE.sub(" ", answer)):
+    sentences = SENTENCE_RE.split(LIST_MARKER_RE.sub(" ", answer))
+    declared = declared_sums(sentences, pool)
+    for sentence in sentences:
         numbers, found_dates, _ = scan(sentence)
         unsupported += [d for d in found_dates if d not in dates]
         grounded = [n for n in numbers if matches(n, pool)]
         percents = {float(p) for p in PERCENT_RE.findall(ID_RE.sub(" ", DATE_RE.sub(" ", sentence)))}
         for n in numbers:
             checked += 1
-            if n in grounded:
+            if n in grounded or matches(n, declared):
                 continue
             others = [g for g in grounded if g != n]
             if SUM_WORDS.search(sentence) and others and matches(n, {sum(others)}):

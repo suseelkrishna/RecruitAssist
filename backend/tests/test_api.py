@@ -64,7 +64,7 @@ def answers_job_count(params):
 
 # Identity
 
-@pytest.mark.parametrize("path", ["/api/me", "/api/dashboard", "/api/jobs", "/api/jobs/JOB-1", "/api/tasks",
+@pytest.mark.parametrize("path", ["/api/me", "/api/catch-up", "/api/dashboard", "/api/jobs", "/api/jobs/JOB-1", "/api/tasks",
                                   "/api/candidates/APP-001", "/api/sources", "/api/changes", "/api/quality"])
 def test_missing_user_gets_401(client, path):
     response = client.get(path)

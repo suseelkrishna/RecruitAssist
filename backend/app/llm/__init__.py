@@ -1,9 +1,24 @@
 """A thin LLM client interface with Anthropic and OpenAI adapters.
 
 The agent loop, the evals, and the health check call models only through this
-package. Models are selected by ID; app/llm/models.yaml maps each ID to its
+package. Models are selected by ID; app/llm/models.json maps each ID to its
 provider and list prices. IDs not in the table fall back to a prefix rule:
 claude-* is Anthropic, gpt-* and o<digit>* are OpenAI.
+
+The fields of each entry in models.json:
+  prices        US dollars per million tokens: input (uncached), output (includes any
+                reasoning or thinking tokens), cache_write, and cache_read. The evals
+                multiply these by the token counts each provider reports, so the cost
+                columns in evals/results.md are only as good as these numbers. OpenAI
+                does not charge extra to write the prompt cache, so its cache_write
+                equals input.
+  confirm       true when the price came from a third-party tracker rather than the
+                provider's own price page; check it before relying on the cost columns.
+  production    true when the app may use the model live (ANTHROPIC_MODEL). The default
+                model the evals pick is chosen only from these. false means eval runs
+                only; the app refuses it unless ALLOW_OPENAI_LIVE=1.
+  eval          true when evals/run.py runs it without --models; false lists it in the
+                report as not run, with skip_reason.
 
 OpenAI models are for eval runs. make_client(model) refuses them for the app
 unless ALLOW_OPENAI_LIVE=1, so production keeps using a Claude model.
@@ -11,13 +26,12 @@ unless ALLOW_OPENAI_LIVE=1, so production keeps using a Claude model.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
-
-import yaml
 
 from app.llm.base import (STOP_REASONS, LLMAPIError, LLMClient, LLMResponse, ToolCall, ToolResult,
                           Usage)
@@ -27,7 +41,7 @@ __all__ = ["STOP_REASONS", "LLMAPIError", "LLMClient", "LLMResponse", "ToolCall"
            "eval_models", "skipped_models", "is_production", "api_key_env", "lookup_model",
            "OpenAINotAllowed"]
 
-MODELS_FILE = Path(__file__).resolve().parent / "models.yaml"
+MODELS_FILE = Path(__file__).resolve().parent / "models.json"
 API_KEY_ENV = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY"}
 
 
@@ -37,8 +51,8 @@ class OpenAINotAllowed(ValueError):
 
 @lru_cache(maxsize=1)
 def models() -> dict[str, dict[str, Any]]:
-    """The model table from models.yaml."""
-    return yaml.safe_load(MODELS_FILE.read_text())["models"]
+    """The model table from models.json."""
+    return json.loads(MODELS_FILE.read_text())["models"]
 
 
 def provider_for(model: str) -> str:
@@ -50,7 +64,7 @@ def provider_for(model: str) -> str:
         return "anthropic"
     if model.startswith("gpt-") or re.match(r"o\d", model):
         return "openai"
-    raise ValueError(f"Unknown model {model!r}. Add it to app/llm/models.yaml with its provider.")
+    raise ValueError(f"Unknown model {model!r}. Add it to app/llm/models.json with its provider.")
 
 
 def api_key_env(model: str) -> str:
