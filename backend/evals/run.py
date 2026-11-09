@@ -203,7 +203,7 @@ async def rejudge(runs: list[dict[str, Any]], data: dict[str, Any], judge_model:
         async with gate:
             try:
                 r["judge"] = await judge.judge(client, judge_model, by_id[r["question_id"]], r["result"]["answer"])
-            except Exception as error:  # Keep the run; it simply has no judge scores.
+            except Exception as error:  # Keep the run; it has no judge scores.
                 r["judge"] = {"scores": None, "error": str(root_error(error))}
 
     await asyncio.gather(*(one(r) for r in targets))
