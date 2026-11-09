@@ -10,3 +10,7 @@ evals_out/
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Vercel CLI project links and macOS folder metadata
+.vercel/
+.DS_Store
