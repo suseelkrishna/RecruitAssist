@@ -38,7 +38,8 @@ backend/                      FastAPI + Python 3.12 + uv (Vercel project 2)
   app/agent/verify.py         number, citation, ranking, and PII checks
   app/agent/cli.py            python -m app.agent.cli "question"
   data/                       generate.py, schema.sql, recruiting.db (committed), recordings.json
-  evals/                      questions.yaml, run.py, results.md, scoreboard.json
+  evals/                      expected.py, questions.yaml, run.py, grade.py, judge.py, judge_rubric.md,
+                              report.py, results.md, scoreboard.json (raw runs go to evals_out/, ignored)
   tests/
 README.md
 CLAUDE.md
@@ -59,7 +60,7 @@ Ask follows a slightly different path: from `main.py` it goes to `agent/loop.py`
 - **Backend:** Python 3.12 with `uv`, FastAPI, `mcp` 2.3.0, the `anthropic` SDK, and pytest. In `mcp` 2.3.0 the server class is `MCPServer`, formerly called `FastMCP`. Check the current SDK docs before writing SDK code; never guess signatures.
 - **Frontend:** Next.js App Router with TypeScript and Recharts. It uses the `@suseelkrishna/fieryfusion-tokens` and `@suseelkrishna/fieryfusion-react` packages from GitHub Packages, with the light theme and the corporate profile.
 - **Hosting:** two Vercel Hobby projects from this repo, with Root Directory set to `frontend/` and `backend/`. The frontend rewrites `/api/*` to `BACKEND_URL`.
-- **Model:** `ANTHROPIC_MODEL`, default `claude-opus-5-5`.
+- **Model:** `ANTHROPIC_MODEL`, default `claude-haiku-5-5` at effort `low` (`ANTHROPIC_EFFORT`), chosen by the evals in `backend/evals/results.md`.
   - Use adaptive thinking and set `output_config.effort` explicitly.
   - Never send `temperature`, `top_p`, or `top_k`.
   - Never force `tool_choice`; use `auto`.

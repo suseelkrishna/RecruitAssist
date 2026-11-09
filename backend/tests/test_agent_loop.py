@@ -124,6 +124,22 @@ async def test_request_shape_caching_thinking_and_no_sampling():
     assert turn.endswith("Question: What jobs can I see?")
 
 
+async def test_effort_argument_is_sent_on_every_round_and_reported(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_EFFORT", "high")
+    run, client = ask([reply(tool_use("t1", "list_jobs"), stop="tool_use"), reply(text("Done."))],
+                      effort="low")
+    result = await run
+    assert [r["output_config"]["effort"] for r in client.requests] == ["low", "low"]
+    assert result["effort"] == "low"
+
+
+async def test_effort_defaults_to_the_environment(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_EFFORT", "high")
+    run, client = ask([reply(text("Done."))])
+    result = await run
+    assert client.requests[0]["output_config"]["effort"] == "high" and result["effort"] == "high"
+
+
 async def test_no_fallback_for_models_without_it():
     run, client = ask([reply(text("Fine."))], model="claude-haiku-5-5")
     await run
