@@ -10,6 +10,9 @@ import type {
   AskResult,
   CatchUpResponse,
   ChangesResponse,
+  Conversation,
+  ConversationDetail,
+  ConversationsResponse,
   DashboardFilters,
   DashboardResponse,
   Evidence,
@@ -115,9 +118,37 @@ export function getCandidate(applicationId: string): Promise<Evidence> {
   return request(`/api/candidates/${encodeURIComponent(applicationId)}`);
 }
 
-/** POST /api/ask: ask the assistant one question and wait for the full, checked answer. */
-export function ask(body: AskBody): Promise<AskResult> {
-  return request("/api/ask", { method: "POST", body: JSON.stringify(body) });
+/**
+ * POST /api/ask: ask the assistant one question and wait for the full, checked answer.
+ * Aborting `signal` (the Stop button) cancels the request; the promise then rejects with an AbortError.
+ */
+export function ask(body: AskBody, signal?: AbortSignal): Promise<AskResult> {
+  return request("/api/ask", { method: "POST", body: JSON.stringify(body), signal });
+}
+
+/** GET /api/conversations: the user's saved chats, newest first. */
+export function listConversations(): Promise<ConversationsResponse> {
+  return request("/api/conversations");
+}
+
+/** GET /api/conversations/{id}: one saved chat with its turns. 404 when it is not the user's. */
+export function getConversation(id: string): Promise<ConversationDetail> {
+  return request(`/api/conversations/${encodeURIComponent(id)}`);
+}
+
+/** POST /api/conversations: start an empty chat, named later from its first question. */
+export function createConversation(): Promise<Conversation> {
+  return request("/api/conversations", { method: "POST", body: JSON.stringify({}) });
+}
+
+/** PATCH /api/conversations/{id}: rename a saved chat. */
+export function renameConversation(id: string, title: string): Promise<Conversation> {
+  return request(`/api/conversations/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ title }) });
+}
+
+/** DELETE /api/conversations/{id}: delete a saved chat and its turns. */
+export function deleteConversation(id: string): Promise<{ deleted: string }> {
+  return request(`/api/conversations/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
 /** GET /api/tasks: pending and overdue tasks, grouped for the role. */

@@ -50,6 +50,7 @@ def backend(request, monkeypatch):
         monkeypatch.setattr(store, "redis", FakeRedis())
     else:
         monkeypatch.delenv("UPSTASH_REDIS_REST_URL", raising=False)
+        monkeypatch.delenv("KV_REST_API_URL", raising=False)
     return request.param
 
 
@@ -72,7 +73,8 @@ def test_changes_get_sequential_ids_and_copies(backend):
 
 
 def test_store_has_no_way_to_edit_or_delete_changes():
-    public = {name for name in dir(store) if not name.startswith("_")}
+    # Saved conversations can be deleted by their owner; nothing else in the store can.
+    public = {name for name in dir(store) if not name.startswith("_") and "conversation" not in name}
     assert not {n for n in public if any(w in n for w in ("delete", "remove", "update", "edit", "pop"))}
 
 
@@ -114,3 +116,26 @@ def test_redis_rate_limit_sets_expiry_once(monkeypatch):
     store.hit_rate_limit("k", 5, 60)
     store.hit_rate_limit("k", 5, 60)
     assert [c[0] for c in fake.commands] == ["INCR", "EXPIRE", "INCR"]
+
+
+def test_vercel_integration_names_also_select_redis(monkeypatch):
+    for name in ("UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN", "KV_REST_API_URL", "KV_REST_API_TOKEN"):
+        monkeypatch.delenv(name, raising=False)
+    assert store.backend() == "memory" and store.redis_url() == "" and store.redis_token() == ""
+    monkeypatch.setenv("KV_REST_API_URL", "https://kv.example.com")
+    monkeypatch.setenv("KV_REST_API_TOKEN", "kv-token")
+    assert store.backend() == "redis"
+    assert store.redis_url() == "https://kv.example.com" and store.redis_token() == "kv-token"
+    # The UPSTASH_ names win when both are set.
+    monkeypatch.setenv("UPSTASH_REDIS_REST_URL", "https://upstash.example.com")
+    monkeypatch.setenv("UPSTASH_REDIS_REST_TOKEN", "upstash-token")
+    assert store.redis_url() == "https://upstash.example.com" and store.redis_token() == "upstash-token"
+
+
+def test_read_only_and_tcp_variables_are_ignored(monkeypatch):
+    for name in ("UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN", "KV_REST_API_URL", "KV_REST_API_TOKEN"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("KV_REST_API_READ_ONLY_TOKEN", "read-only")
+    monkeypatch.setenv("KV_URL", "rediss://kv.example.com")
+    monkeypatch.setenv("REDIS_URL", "rediss://kv.example.com")
+    assert store.backend() == "memory" and store.redis_token() == ""

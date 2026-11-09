@@ -1,25 +1,25 @@
 "use client";
 
 /**
- * Ask: the recruiter types a question, or picks a suggested one for their role, and the page
- * sends it to POST /api/ask once. The answer comes back whole, already checked by the
- * verifier, with citations that open the evidence drawer. The scope header comes from
- * GET /api/me. A question can arrive prefilled from the dashboard through ?q= and ?job=.
+ * Ask: a conversation with the assistant. The recruiter types a question, or picks a
+ * suggested one for their role, and each reply comes back whole, already checked by the
+ * verifier. Follow-up questions carry the last few answered turns as history. The scope
+ * header comes from GET /api/me. A question can arrive prefilled from the dashboard through
+ * ?q= and ?job=. Chats are saved per user and listed beside the conversation (in a drawer on
+ * narrow screens); ?c= opens one. The conversation state lives in useChat.
  */
 
-import { Alert, Button, Card, Field, Select, Stack, Textarea } from "@suseelkrishna/fieryfusion-react";
-import Link from "next/link";
+import { Button, Drawer, Field, Select, Stack } from "@suseelkrishna/fieryfusion-react";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState, type FormEvent } from "react";
-import { AnswerText } from "@/components/AnswerText";
+import { Suspense, useState } from "react";
 import { AppShell } from "@/components/AppShell";
-import { BehindTheScenes } from "@/components/BehindTheScenes";
-import { CitationChip } from "@/components/CitationChip";
+import { ChatInput } from "@/components/ChatInput";
+import { ChatThread } from "@/components/ChatThread";
 import { ErrorState, LoadingSkeleton } from "@/components/PageStates";
-import { VerifierBadge } from "@/components/VerifierBadge";
-import { ApiError, ask, getMe } from "@/lib/api";
-import { formatDateTime } from "@/lib/format";
-import type { AskResult, Role } from "@/lib/types";
+import { SessionsPanel } from "@/components/SessionsPanel";
+import { getMe } from "@/lib/api";
+import type { MeResponse, Role } from "@/lib/types";
+import { useChat } from "@/lib/useChat";
 import { useLoad } from "@/lib/useLoad";
 
 type Suggestion = { question: string; about: string };
@@ -42,186 +42,108 @@ const SUGGESTIONS: Record<Role, Suggestion[]> = {
   ],
 };
 
-/** The dashboard panel that shows the same numbers as a question, for when asking fails. */
-function dashboardLinkFor(question: string): string {
-  const q = question.toLowerCase();
-  if (q.includes("losing") || q.includes("pipeline")) return "/dashboard#funnel";
-  if (q.includes("overloaded") || q.includes("recruiter")) return "/dashboard#recruiter-load";
-  if (q.includes("target") || q.includes("behind")) return "/dashboard#days-open";
-  if (q.includes("source")) return "/dashboard#source-quality";
-  if (q.includes("withdr")) return "/dashboard#withdrawals";
-  if (q.includes("offer")) return "/dashboard#offers";
-  return "/dashboard";
-}
+/** The chat for the loaded user: saved chats beside the conversation and the question box. */
+function Chat({ me, initialId, initialQuestion, initialJob }: { me: MeResponse; initialId: string | null; initialQuestion: string; initialJob: string }) {
+  const { summary, scope, user } = me;
+  const chat = useChat(user.user_id, initialId);
+  const [question, setQuestion] = useState(initialQuestion);
+  const [jobId, setJobId] = useState(initialJob);
+  // Changes on every pick or New chat, so the drawer (keyed by it) closes even when the open chat stays the same.
+  const [picks, setPicks] = useState(0);
 
-/** The note shown above a recorded answer. A recording is never shown without it. */
-function recordingNote(result: AskResult): string {
-  return result.recording_reason === "live_unavailable"
-    ? "Showing a recorded answer because live answers are not available right now."
-    : "Showing a recorded answer because the live limit was reached.";
-}
+  /** Send a question and clear the box. */
+  function send(text: string) {
+    setQuestion("");
+    void chat.ask(text, jobId);
+  }
 
-type Turn = { question: string; result: AskResult };
+  const panel = (
+    <SessionsPanel
+      conversations={chat.conversations}
+      currentId={chat.conversationId}
+      role={user.role}
+      storage={chat.storage}
+      onNew={() => {
+        chat.newChat();
+        setPicks((n) => n + 1);
+      }}
+      onOpen={(id) => {
+        chat.openChat(id);
+        setPicks((n) => n + 1);
+      }}
+      onRename={chat.rename}
+      onDelete={(id) => void chat.remove(id)}
+    />
+  );
 
-/** One finished answer with its verifier badge, citations, and the behind the scenes panel. */
-function AnswerCard({ turn }: { turn: Turn }) {
-  const { result } = turn;
   return (
-    <Card className="fade-in">
-      <Stack gap={12}>
-        <p className="label-small">You asked</p>
-        <p style={{ margin: 0, fontWeight: 600 }}>{turn.question}</p>
-        {result.source === "recording" && (
-          <Alert tone="info" title="Recorded answer">
-            {recordingNote(result)} Recorded {formatDateTime(result.recorded_at)}.
-          </Alert>
-        )}
-        <VerifierBadge result={result} />
-        <AnswerText text={result.answer} />
-        {result.citations.length > 0 && (
+    <div className="ask-layout">
+      <aside className="ask-sessions">{panel}</aside>
+      <Stack gap={20} className="chat-page">
+        <div className="page-head">
           <div>
-            <p className="label-small">Sources</p>
-            <div className="chips">
-              {result.citations.map((id) => (
-                <CitationChip key={id} id={id} />
-              ))}
+            <h1>Ask</h1>
+            <p>
+              Your scope: {summary.jobs} jobs, {summary.active_candidates} candidates, {summary.overdue_tasks} overdue tasks
+            </p>
+          </div>
+          <div className="ask-head-actions">
+            <div className="ask-chats-button">
+              {/* Keyed by the pick count, so picking or starting a chat closes the drawer. */}
+              <Drawer
+                key={picks}
+                title="Chats"
+                description="Your saved chats, newest first."
+                trigger={<Button variant="secondary">Chats</Button>}
+              >
+                {panel}
+              </Drawer>
+            </div>
+            <div className="field-narrow">
+              <Field label="Limit to one job">
+                <Select
+                  value={jobId}
+                  onChange={(e) => setJobId(e.target.value)}
+                  options={[{ label: "All jobs in my scope", value: "" }, ...scope.jobs.map((j) => ({ label: `${j.job_id} ${j.title}`, value: j.job_id }))]}
+                />
+              </Field>
             </div>
           </div>
-        )}
-        <BehindTheScenes result={result} />
-      </Stack>
-    </Card>
-  );
-}
+        </div>
 
-/** "Checking the data..." with the seconds waited so far. */
-function Waiting() {
-  const [seconds, setSeconds] = useState(0);
-  useEffect(() => {
-    const timer = window.setInterval(() => setSeconds((s) => s + 1), 1000);
-    return () => window.clearInterval(timer);
-  }, []);
-  return (
-    <Card>
-      <p role="status" aria-live="polite" style={{ margin: 0 }}>
-        Checking the data... {seconds}s
-      </p>
-    </Card>
+        {chat.turns.length === 0 ? (
+          <section aria-labelledby="suggested">
+            <h2 id="suggested" className="label-small">
+              Try one of these
+            </h2>
+            <ul className="grid grid-3 list-plain" style={{ marginTop: 8 }}>
+              {SUGGESTIONS[user.role].map((s) => (
+                <li key={s.question}>
+                  <button type="button" className="suggestion" onClick={() => send(s.question)}>
+                    <span className="suggestion-question">{s.question}</span>
+                    <span className="suggestion-about">{s.about}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : (
+          <ChatThread turns={chat.turns} role={user.role} isOpen={chat.isOpen} onToggle={chat.toggle} onRetry={chat.retry} />
+        )}
+
+        <ChatInput value={question} onChange={setQuestion} onSend={send} onStop={chat.stop} waiting={chat.waiting} />
+      </Stack>
+    </div>
   );
 }
 
 function Ask() {
   const params = useSearchParams();
   const me = useLoad(getMe, "me");
-  const [question, setQuestion] = useState(params.get("q") ?? "");
-  const [jobId, setJobId] = useState(params.get("job") ?? "");
-  const [turns, setTurns] = useState<Turn[]>([]);
-  const [waiting, setWaiting] = useState(false);
-  const [failure, setFailure] = useState<{ question: string; message: string } | null>(null);
-
-  /** Send one question and add the answer to the page. */
-  async function send(text: string) {
-    const q = text.trim();
-    if (!q || waiting) return;
-    setWaiting(true);
-    setFailure(null);
-    try {
-      const result = await ask({ question: q, ...(jobId ? { job_id: jobId } : {}) });
-      setTurns((t) => [{ question: q, result }, ...t]);
-      setQuestion("");
-    } catch (error) {
-      setFailure({ question: q, message: error instanceof ApiError ? error.message : "The assistant could not answer." });
-    } finally {
-      setWaiting(false);
-    }
-  }
-
-  function onSubmit(event: FormEvent) {
-    event.preventDefault();
-    void send(question);
-  }
-
   if (me.state === "loading") return <LoadingSkeleton blocks={2} label="Loading your scope" />;
   if (me.state === "error" || me.state === "not_found")
     return <ErrorState message={me.state === "error" ? me.message : "Your scope could not be loaded."} onRetry={me.reload} />;
-  const { summary, scope, user } = me.data;
-
-  return (
-    <Stack gap={20}>
-      <div className="page-head">
-        <div>
-          <h1>Ask</h1>
-          <p>
-            Your scope: {summary.jobs} jobs, {summary.active_candidates} candidates, {summary.overdue_tasks} overdue tasks
-          </p>
-        </div>
-        <div className="field-narrow">
-          <Field label="Limit to one job">
-            <Select
-            value={jobId}
-            onChange={(e) => setJobId(e.target.value)}
-            options={[{ label: "All jobs in my scope", value: "" }, ...scope.jobs.map((j) => ({ label: `${j.job_id} ${j.title}`, value: j.job_id }))]}
-          />
-          </Field>
-        </div>
-      </div>
-
-      <form onSubmit={onSubmit}>
-        <Stack gap={12}>
-          <Field label="Your question" hint="Answers use only the jobs in your scope. The assistant cannot change any record.">
-            <Textarea value={question} onChange={(e) => setQuestion(e.target.value)} rows={3} maxLength={1000} />
-          </Field>
-          <div>
-            <Button type="submit" loading={waiting} disabled={!question.trim()}>
-              Ask
-            </Button>
-          </div>
-        </Stack>
-      </form>
-
-      {waiting && <Waiting />}
-
-      {failure && (
-        <Alert tone="warning" title="The assistant could not answer this one">
-          {failure.message} You can still see the numbers on the{" "}
-          <Link className="ff-link" href={dashboardLinkFor(failure.question)}>
-            matching dashboard table
-          </Link>
-          .
-        </Alert>
-      )}
-
-      {turns.length === 0 && !waiting ? (
-        <section aria-labelledby="suggested">
-          <h2 id="suggested" className="label-small">
-            Try one of these
-          </h2>
-          <ul className="grid grid-3 list-plain" style={{ marginTop: 8 }}>
-            {SUGGESTIONS[user.role].map((s) => (
-              <li key={s.question}>
-                <button type="button" className="suggestion" onClick={() => void send(s.question)}>
-                  <span className="suggestion-question">{s.question}</span>
-                  <span className="suggestion-about">{s.about}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : (
-        <div className="card-actions" aria-label="Suggested questions">
-          <span className="label-small">Suggested</span>
-          {SUGGESTIONS[user.role].map((s) => (
-            <Button key={s.question} variant="secondary" size="sm" disabled={waiting} onClick={() => void send(s.question)}>
-              {s.question}
-            </Button>
-          ))}
-        </div>
-      )}
-      {turns.map((turn, i) => (
-        <AnswerCard key={turns.length - i} turn={turn} />
-      ))}
-    </Stack>
-  );
+  return <Chat me={me.data} initialId={params.get("c")} initialQuestion={params.get("q") ?? ""} initialJob={params.get("job") ?? ""} />;
 }
 
 export default function AskPage() {

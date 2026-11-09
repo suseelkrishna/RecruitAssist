@@ -20,6 +20,7 @@ import { ROLE_LABELS } from "@/lib/roles";
 import type { ChangeEntry } from "@/lib/types";
 import { toolName } from "@/lib/tools";
 import { useLoad } from "@/lib/useLoad";
+import { HeadingWithInfo } from "@/components/HeadingWithInfo";
 
 const KINDS = { All: "", Reassignments: "reassignment", Questions: "ask" } as const;
 type KindLabel = keyof typeof KINDS;
@@ -58,8 +59,7 @@ function Changes() {
     <>
       <div className="page-head">
         <div>
-          <h1>Changes</h1>
-          <p>An append-only log of reassignments and questions asked. Entries cannot be edited or deleted.</p>
+          <HeadingWithInfo as="h1" title="Changes" info="An append-only log of reassignments and questions asked. Entries cannot be edited or deleted." />
         </div>
         <SegmentedControl label="Show" options={Object.keys(KINDS)} value={label} onChange={(v) => set("kind", KINDS[v as KindLabel])} />
       </div>
@@ -72,7 +72,7 @@ function Changes() {
             return (
               <Empty
                 title="No entries yet"
-                description="Reassignments and questions asked in your scope appear here. The log starts empty when the server starts."
+                description="Reassignments and questions asked in your scope appear here."
               />
             );
           return (

@@ -12,6 +12,7 @@ Usage (from backend/):
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from contextlib import closing
 import sys
@@ -458,6 +459,162 @@ def out_of_scope_records(con: sqlite3.Connection, user_id: str, full_name: str) 
             "record_ids": [app["application_id"]] + ids(scorecards, "scorecard_id") + ids(emails, "email_id")}
 
 
+# --- Multi-tool questions: answer keys that combine several facts ---------------
+#
+# These back the multi_tool group: questions that need two or three tools in one answer.
+# The ranking below re-implements the published rubric (50% scorecards, 30% must-have
+# ratings, 20% furthest stage) from the raw tables, independently of app/logic/scoring.py.
+
+RUBRIC_POINTS = {"strong_yes": 4, "yes": 3, "no": 2, "strong_no": 1}
+
+
+def rubric_ranking(con: sqlite3.Connection, job: str, as_of: str) -> list[dict]:
+    """Active applications on one job ranked by the published rubric, best first.
+
+    Ties keep application_id order. An application with a completed interview that has no
+    scorecard is flagged incomplete.
+    """
+    must_haves = json.loads(con.execute("SELECT must_have_json FROM jobs WHERE job_id = ?",
+                                        (job,)).fetchone()[0])
+    apps = con.execute(
+        """SELECT a.application_id, c.full_name, c.source FROM applications a
+           JOIN candidates c ON c.candidate_id = a.candidate_id
+           WHERE a.job_id = ? AND a.status = 'active' AND a.applied_at <= ?
+           ORDER BY a.application_id""", (job, as_of)).fetchall()
+    ranking = []
+    for app in apps:
+        interviews = con.execute(
+            """SELECT i.interview_id, s.scorecard_id, s.overall, s.ratings_json
+               FROM interviews i
+               LEFT JOIN scorecards s ON s.interview_id = i.interview_id AND s.submitted_at <= :as_of
+               WHERE i.application_id = :app AND i.completed_at IS NOT NULL AND i.completed_at <= :as_of""",
+            {"app": app["application_id"], "as_of": as_of}).fetchall()
+        cards = [r for r in interviews if r["scorecard_id"] is not None]
+        scorecards = (sum(RUBRIC_POINTS[c["overall"]] for c in cards) / len(cards) - 1) / 3 if cards else 0.0
+        ratings: dict[str, list[int]] = {m: [] for m in must_haves}
+        for c in cards:
+            for skill, value in json.loads(c["ratings_json"]).items():
+                if skill in ratings:
+                    ratings[skill].append(value)
+        must = (sum((sum(v) / len(v) - 1) / 3 for v in ratings.values() if v) / len(must_haves)
+                if must_haves else 0.0)
+        furthest = con.execute(
+            "SELECT stage FROM stage_events WHERE application_id = ? AND entered_at <= ?",
+            (app["application_id"], as_of)).fetchall()
+        stage = max(STAGE_ORDER.index(r["stage"]) for r in furthest) / (len(STAGE_ORDER) - 1)
+        ranking.append({"application_id": app["application_id"], "full_name": app["full_name"],
+                        "source": app["source"],
+                        "score": round(0.5 * scorecards + 0.3 * must + 0.2 * stage, 4),
+                        "incomplete": any(r["scorecard_id"] is None for r in interviews) or not cards})
+    ranking.sort(key=lambda r: (-r["score"], r["application_id"]))
+    return [{"rank": n, **r} for n, r in enumerate(ranking, start=1)]
+
+
+def open_jobs_behind_target(con: sqlite3.Connection, as_of: str, jobs: list[str]) -> list[dict]:
+    """Open jobs among `jobs` with days open and days over target, furthest over first."""
+    rows = con.execute(
+        f"""SELECT job_id, title, ROUND(julianday(?) - julianday(opened_at), 1) AS days_open,
+                   target_fill_days
+            FROM jobs WHERE status = 'open' AND job_id IN ({",".join("?" * len(jobs))})""",
+        [as_of, *jobs]).fetchall()
+    out = [{**dict(r), "days_over": round(r["days_open"] - r["target_fill_days"], 1)} for r in rows]
+    return sorted(out, key=lambda r: -r["days_over"])
+
+
+def lowest_pass_stage(con: sqlite3.Connection, job: str) -> dict:
+    """The stage with the lowest share of exits that advanced, on one job."""
+    row = con.execute(
+        """SELECT e.stage, ROUND(100.0 * SUM(e.exit_type = 'advanced') / COUNT(*), 1) AS pass_rate_pct
+           FROM stage_events e JOIN applications a ON a.application_id = e.application_id
+           WHERE a.job_id = ? AND e.exit_type IS NOT NULL
+           GROUP BY e.stage
+           ORDER BY 1.0 * SUM(e.exit_type = 'advanced') / COUNT(*), e.stage
+           LIMIT 1""", (job,)).fetchone()
+    next_stage = STAGE_ORDER[STAGE_ORDER.index(row["stage"]) + 1]
+    return {"stage": row["stage"], "transition": f"{row['stage']} to {next_stage}",
+            "pass_rate_pct": row["pass_rate_pct"]}
+
+
+def busiest_recruiter(con: sqlite3.Connection, jobs: list[str]) -> dict:
+    """The recruiter with the most active applications across `jobs`, and their busiest job."""
+    rows = con.execute(
+        f"""SELECT u.user_id, u.name, a.job_id, COUNT(*) AS active
+            FROM applications a
+            JOIN job_assignments ja ON ja.job_id = a.job_id
+            JOIN users u ON u.user_id = ja.recruiter_user_id
+            WHERE a.status = 'active' AND a.job_id IN ({",".join("?" * len(jobs))})
+            GROUP BY u.user_id, a.job_id""", jobs).fetchall()
+    totals: dict[str, int] = {}
+    for r in rows:
+        totals[r["user_id"]] = totals.get(r["user_id"], 0) + r["active"]
+    user = max(totals, key=lambda u: (totals[u], u))
+    mine = sorted((r for r in rows if r["user_id"] == user), key=lambda r: (-r["active"], r["job_id"]))
+    return {"user_id": user, "name": mine[0]["name"], "active": totals[user], "busiest_job": mine[0]["job_id"]}
+
+
+def source_reaching_onsite(con: sqlite3.Connection, job: str) -> dict:
+    """The source with the most applicants who reached Onsite on one job (ties by name)."""
+    rows = con.execute(
+        """SELECT c.source, COUNT(DISTINCT a.application_id) AS applicants,
+                  COUNT(DISTINCT CASE WHEN e.stage = 'Onsite' THEN a.application_id END) AS reached_onsite
+           FROM applications a
+           JOIN candidates c ON c.candidate_id = a.candidate_id
+           LEFT JOIN stage_events e ON e.application_id = a.application_id
+           WHERE a.job_id = ?
+           GROUP BY c.source
+           ORDER BY reached_onsite DESC, c.source""", (job,)).fetchall()
+    return dict(rows[0])
+
+
+def withdrawals_by_source(con: sqlite3.Connection, job: str) -> dict:
+    """Withdrawn applications on one job, and how many came from each source."""
+    rows = con.execute(
+        """SELECT a.application_id, c.source FROM applications a
+           JOIN candidates c ON c.candidate_id = a.candidate_id
+           WHERE a.job_id = ? AND a.status = 'withdrawn' ORDER BY a.application_id""", (job,)).fetchall()
+    counts: dict[str, int] = {}
+    for r in rows:
+        counts[r["source"]] = counts.get(r["source"], 0) + 1
+    return {"withdrawn": len(rows), "application_ids": ids(rows, "application_id"),
+            "by_source": dict(sorted(counts.items()))}
+
+
+def offers_waiting(con: sqlite3.Connection, as_of: str) -> list[dict]:
+    """Active applications sitting in Offer now, with how long their job has been open."""
+    rows = con.execute(
+        """SELECT a.application_id, a.job_id, ROUND(julianday(?) - julianday(j.opened_at), 1) AS days_open
+           FROM applications a JOIN jobs j ON j.job_id = a.job_id
+           WHERE a.status = 'active' AND a.current_stage = 'Offer'
+           ORDER BY a.application_id""", (as_of,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def stuck_over_a_week(con: sqlite3.Connection, as_of: str, jobs: list[str]) -> list[dict]:
+    """Active applications on `jobs` in the same stage (other than Offer) for more than 7 days."""
+    rows = con.execute(
+        f"""SELECT a.application_id, e.stage FROM applications a
+            JOIN stage_events e ON e.application_id = a.application_id
+            WHERE a.status = 'active' AND a.job_id IN ({",".join("?" * len(jobs))})
+              AND e.stage <> 'Offer' AND e.entered_at <= ?
+              AND (e.exited_at IS NULL OR e.exited_at > ?)
+              AND julianday(?) - julianday(e.entered_at) > 7
+            ORDER BY a.application_id""", [*jobs, as_of, as_of, as_of]).fetchall()
+    return [dict(r) for r in rows]
+
+
+def jobs_missing_scorecards(con: sqlite3.Connection, as_of: str) -> list[str]:
+    """Open jobs with a completed interview on an active application that has no scorecard."""
+    rows = con.execute(
+        """SELECT DISTINCT a.job_id FROM interviews i
+           JOIN applications a ON a.application_id = i.application_id
+           JOIN jobs j ON j.job_id = a.job_id
+           LEFT JOIN scorecards s ON s.interview_id = i.interview_id AND s.submitted_at <= :as_of
+           WHERE j.status = 'open' AND a.status = 'active' AND i.completed_at IS NOT NULL
+             AND i.completed_at <= :as_of AND s.scorecard_id IS NULL
+           ORDER BY a.job_id""", {"as_of": as_of}).fetchall()
+    return ids(rows, "job_id")
+
+
 # --- Assemble questions.json -----------------------------------------------------
 #
 # Each question names the demo user who asks it, an optional earlier exchange
@@ -496,8 +653,8 @@ def leak_answer(leak: dict) -> str:
             f"onsite. The secondary leak is {leak['secondary_leak']}, mostly agency-sourced applicants.")
 
 
-def build_questions(con: sqlite3.Connection) -> dict:
-    """All eval questions with their SQL-computed expected answers and checks."""
+def core_questions(con: sqlite3.Connection) -> dict:
+    """The core eval questions with their SQL-computed expected answers and checks."""
     m = meta(con)
     as_of = m["as_of"]
     leak = controls_leak(con, as_of)
@@ -752,6 +909,179 @@ def build_questions(con: sqlite3.Connection) -> dict:
             scoped("scoped-user", "USR-4"),
         ],
     }
+
+
+def history_turn(question: str, answer: str) -> dict:
+    """An earlier turn as the app sends it: the question, the answer, and the record IDs it cited."""
+    cited = list(dict.fromkeys(re.findall(r"\b(?:JOB|APP|SC|EM|TASK|EV)-\d+\b", answer)))
+    return {"question": question, "answer": answer, "citations": cited}
+
+
+def multi_tool_questions(con: sqlite3.Connection, as_of: str, top3: dict, overdue: dict) -> list[dict]:
+    """Questions that need two or three tools in one answer, including two follow-ups and one
+    question that is half out of scope. Checks add tool_calls (min and max) and tool_order
+    (pairs of tools where the second call needs the first one's output)."""
+    admin_jobs = scope_jobs(con, "USR-1")
+    behind = open_jobs_behind_target(con, as_of, admin_jobs)[0]
+    behind_rank = rubric_ranking(con, behind["job_id"], as_of)
+    behind_leak = lowest_pass_stage(con, behind["job_id"])
+    manager_jobs = scope_jobs(con, "USR-2")
+    busy = busiest_recruiter(con, manager_jobs)
+    busy_leak = lowest_pass_stage(con, busy["busiest_job"])
+    process = job_id(con, "Manufacturing Process Engineer")
+    controls = job_id(con, "Senior Controls Engineer")
+    process_rank = rubric_ranking(con, process, as_of)
+    best_source = source_reaching_onsite(con, process)
+    source_in_top3 = [r["application_id"] for r in process_rank[:3] if r["source"] == best_source["source"]]
+    manager_open = [j["job_id"] for j in open_jobs_behind_target(con, as_of, manager_jobs)]
+    manager_tops = {j: rubric_ranking(con, j, as_of)[0] for j in sorted(manager_open)}
+    controls_rank = rubric_ranking(con, controls, as_of)
+    fourth = process_rank[3]
+    user_jobs = scope_jobs(con, "USR-4")
+    stuck = stuck_over_a_week(con, as_of, user_jobs)
+    withdrew = withdrawals_by_source(con, controls)
+    offers = offers_waiting(con, as_of)
+    missing_jobs = jobs_missing_scorecards(con, as_of)
+    titles = {r["job_id"]: r["title"] for r in con.execute("SELECT job_id, title FROM jobs")}
+    hidden = [r["application_id"] for r in process_rank[:3]]
+    hidden_names = [r["full_name"] for r in process_rank[:3]]
+    earlier = history_turn("Who are the top 3 candidates for the Manufacturing Process Engineer role?",
+                           top3_answer(top3))
+
+    def question(qid: str, user: str, text: str, expected_key: dict, must: list[str], checks: dict,
+                 history: list[dict] | None = None) -> dict:
+        """One multi_tool question."""
+        entry = {"id": qid, "group": "multi_tool", "user": user}
+        if history:
+            entry["history"] = history
+        return {**entry, "question": text, "expected": expected_key, "must": must, "checks": checks}
+
+    return [
+        question("mt-behind-leak-top3", "USR-1",
+                 "Which open role is furthest behind its hiring target, where is it losing the most "
+                 "candidates, and who are its top 3 candidates?",
+                 {"job": behind, "leak": behind_leak, "top_3": behind_rank[:3]},
+                 [f"Names {behind['title']} ({behind['job_id']}), {behind['days_over']:g} days over target.",
+                  f"Names {behind_leak['transition']} as the biggest leak.",
+                  "Lists its top 3 in rubric order."],
+                 {"top": [r["application_id"] for r in behind_rank[:3]],
+                  "mentions": [behind["title"], behind_leak["stage"]],
+                  "tools": ["funnel_dropoff", "score_candidates"],
+                  "tool_calls": {"min": 2, "max": 6}}),
+        question("mt-overdue-integration", "USR-1",
+                 "What is overdue on the People Operations Partner role, and could an integration "
+                 "problem explain any missing scorecards?",
+                 {"overdue": overdue["overdue_tasks"], "integration": "Interview notes"},
+                 ["Lists the overdue work.", "Says the Interview notes integration is degraded and could "
+                  "explain missing scorecards."],
+                 {"ids": [t["task_id"] for t in overdue["overdue_tasks"]],
+                  "mentions": ["interview notes"],
+                  "tools": ["pending_tasks", "integration_health"],
+                  "tool_calls": {"min": 2, "max": 5}}),
+        question("mt-overloaded-recruiter-leak", "USR-2",
+                 "Which recruiter on my teams carries the most active candidates, and where is their "
+                 "busiest open job losing candidates?",
+                 {"recruiter": busy, "leak": busy_leak},
+                 [f"Names {busy['name']} with {busy['active']} active candidates.",
+                  f"Names {busy_leak['transition']} on {titles[busy['busiest_job']]} as the biggest leak."],
+                 {"numbers": [busy["active"]],
+                  "mentions": [busy["name"], busy_leak["stage"]],
+                  "tools": ["recruiter_load", "funnel_dropoff"],
+                  "tool_order": [["recruiter_load", "funnel_dropoff"]],
+                  "tool_calls": {"min": 2, "max": 5}}),
+        question("mt-source-in-top3", "USR-1",
+                 "For the Manufacturing Process Engineer role, which source got the most applicants to "
+                 "Onsite, and are any of that source's candidates in the top 3?",
+                 {"source": best_source, "in_top_3": source_in_top3},
+                 [f"Names {best_source['source']} with {best_source['reached_onsite']} applicants reaching Onsite.",
+                  f"Says {', '.join(source_in_top3) or 'none'} from that source is in the top 3."],
+                 {"ids": source_in_top3,
+                  "numbers": [best_source["reached_onsite"]],
+                  "mentions": [best_source["source"]],
+                  "tools": ["source_quality", "score_candidates"],
+                  "tool_calls": {"min": 2, "max": 7}}),
+        question("mt-compare-tops", "USR-2",
+                 "Compare the top candidate on each open role on my teams, and name any missing evidence.",
+                 {"tops": manager_tops},
+                 [f"Names {r['full_name']} ({r['application_id']}) as the top candidate on {titles[j]}."
+                  for j, r in manager_tops.items()] + ["Says whether any evidence is missing."],
+                 {"ids": [r["application_id"] for r in manager_tops.values()],
+                  "tools": ["score_candidates"],
+                  "tool_calls": {"min": len(manager_tops), "max": 6}}),
+        question("mt-followup-fourth", "USR-1", "And who is fourth?",
+                 {"fourth": fourth, "tied_with_third": fourth["score"] == process_rank[2]["score"]},
+                 [f"Names {fourth['full_name']} ({fourth['application_id']}) as fourth, on the same job."],
+                 {"ids": [fourth["application_id"]],
+                  "mentions": [fourth["full_name"]],
+                  "tools": ["score_candidates"],
+                  "tool_calls": {"min": 1, "max": 3}},
+                 history=[earlier]),
+        question("mt-followup-other-job", "USR-1", "What about the same for the Senior Controls Engineer role?",
+                 {"top_3": controls_rank[:3]},
+                 ["Lists the top 3 for Senior Controls Engineer in rubric order."],
+                 {"top": [r["application_id"] for r in controls_rank[:3]],
+                  "tools": ["score_candidates"],
+                  "tool_calls": {"min": 1, "max": 3}},
+                 history=[earlier]),
+        question("mt-mixed-scope", "USR-4",
+                 "How is the Senior Controls Engineer pipeline doing, and who are the top 3 candidates for "
+                 "the Manufacturing Process Engineer role?",
+                 {"in_scope_job": controls, "out_of_scope_job": process, "hidden": hidden},
+                 ["Answers about Senior Controls Engineer.",
+                  "Says Manufacturing Process Engineer is outside the user's scope, with no IDs, names, or "
+                  "numbers from it."],
+                 {"ids_absent": hidden + [process],
+                  "forbidden": [re.escape(n) for n in hidden_names],
+                  "mentions": [SCOPE_REFUSAL, "onsite"],
+                  "tools": ["funnel_dropoff|pipeline_by_job"],
+                  "tool_calls": {"min": 1, "max": 5}}),
+        question("mt-stuck-candidates", "USR-4",
+                 "Which of my candidates have been stuck in the same stage for over a week, and what stage "
+                 "are they in?",
+                 {"stuck": stuck},
+                 ["Lists each stuck application with its stage."],
+                 {"ids": [r["application_id"] for r in stuck],
+                  "mentions": sorted({r["stage"] for r in stuck}),
+                  "tools": ["pending_tasks|pipeline_by_job"],
+                  "tool_calls": {"min": 1, "max": 4}}),
+        question("mt-withdrawals-by-source", "USR-1",
+                 "On the Senior Controls Engineer role, how many candidates withdrew, and which sources did "
+                 "they come from?",
+                 {"withdrawals": withdrew},
+                 [f"Says {withdrew['withdrawn']} withdrew, broken down by source."],
+                 {"numbers": [withdrew["withdrawn"]],
+                  "mentions": list(withdrew["by_source"]),
+                  "tools": ["funnel_dropoff|get_candidate_evidence|pipeline_by_job"],
+                  "tool_calls": {"min": 1, "max": 10}}),
+        question("mt-offers-days-open", "USR-1",
+                 "Which offers are still waiting on an answer, and how long has each of those roles been open?",
+                 {"offers": offers},
+                 ["Lists each application in Offer with how long its role has been open."],
+                 {"ids": [r["application_id"] for r in offers],
+                  "numbers": sorted({r["days_open"] for r in offers}),
+                  "tools": ["pipeline_by_job|pending_tasks|list_jobs"],
+                  "tool_calls": {"min": 1, "max": 5}}),
+        question("mt-integration-impact", "USR-1",
+                 "Is any integration unhealthy right now, and which open roles have interviews missing "
+                 "scorecards that it could explain?",
+                 {"integration": "Interview notes", "jobs": missing_jobs},
+                 ["Says the Interview notes integration is degraded.",
+                  f"Names {', '.join(titles[j] for j in missing_jobs)} as roles with missing scorecards."],
+                 {"mentions": ["interview notes"] + [titles[j] for j in missing_jobs],
+                  "tools": ["integration_health", "pending_tasks|score_candidates|pipeline_by_job"],
+                  "tool_calls": {"min": 2, "max": 6}}),
+    ]
+
+
+def build_questions(con: sqlite3.Connection) -> dict:
+    """All eval questions: the core group (the default run and the scoreboard) and the
+    multi_tool group (run with --group multi_tool)."""
+    data = core_questions(con)
+    core = [{"id": q["id"], "group": "core", **{k: v for k, v in q.items() if k != "id"}}
+            for q in data["questions"]]
+    top3 = process_top3(con)
+    overdue = people_overdue(con, data["as_of"])
+    return {**data, "questions": core + multi_tool_questions(con, data["as_of"], top3, overdue)}
 
 
 def to_json(questions: dict) -> str:

@@ -12,6 +12,7 @@ import { EvidenceBody } from "@/components/EvidenceView";
 import { ErrorState, LoadingSkeleton } from "@/components/PageStates";
 import { getCandidate } from "@/lib/api";
 import { useLoad } from "@/lib/useLoad";
+import { HeadingWithInfo } from "@/components/HeadingWithInfo";
 
 export default function CandidatePage() {
   const { applicationId } = useParams<{ applicationId: string }>();
@@ -26,8 +27,11 @@ export default function CandidatePage() {
           <div className="page-head">
             <div>
               <p className="label-small">Candidate evidence</p>
-              <h1>{result.data.full_name}</h1>
-              <p>Contact details are masked. Text marked Candidate-provided was written by the candidate.</p>
+              <HeadingWithInfo
+                as="h1"
+                title={result.data.full_name}
+                info="Contact details are masked. Text marked Candidate-provided was written by the candidate."
+              />
             </div>
           </div>
           <EvidenceBody evidence={result.data} />

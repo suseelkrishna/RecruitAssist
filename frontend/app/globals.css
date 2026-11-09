@@ -740,3 +740,300 @@ span.chip {
   display: grid;
   gap: 8px;
 }
+
+/* InfoTip: the kit's HoverInfoCard trigger shown as a small round (i). The text label stays
+   in the button for screen readers; font-size 0 hides it visually. */
+
+.info-tip {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+
+.info-tip .ff-button {
+  min-height: 0;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 0;
+  gap: 0;
+}
+
+.info-tip .ff-button svg {
+  display: none;
+}
+
+.info-tip .ff-button > span::before {
+  content: "i";
+  font-size: 13px;
+  font-style: italic;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.quality-meta {
+  font-size: 0.875rem;
+  margin: 4px 0 0;
+}
+
+/* Ask conversation: question bubbles on the right, replies on the left, and the question box
+   pinned to the bottom of the window. Wide answer tables scroll inside their bubble. */
+
+.chat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.chat-turn {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.bubble {
+  min-width: 0;
+  max-width: 100%;
+  border-radius: var(--ff-radius, 16px);
+  padding: 12px 16px;
+  overflow-wrap: anywhere;
+}
+
+.bubble-user {
+  align-self: flex-end;
+  max-width: min(85%, 640px);
+  background: var(--ff-accent-soft);
+  white-space: pre-wrap;
+}
+
+.bubble-assistant {
+  align-self: stretch;
+  background: var(--ff-surface);
+  border: var(--ff-hair, 1px) solid var(--ff-line);
+}
+
+.bubble-assistant .answer-table,
+.message-panel {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* Table cells keep whole words; a table too wide for the bubble scrolls instead. */
+.bubble-assistant table {
+  overflow-wrap: normal;
+}
+
+.bubble-assistant th {
+  white-space: nowrap;
+}
+
+.message-panel > :first-child {
+  margin-top: 0;
+}
+
+.message-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.message-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.message-panel {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: var(--ff-hair, 1px) solid var(--ff-line);
+}
+
+.message-panel .label-small {
+  margin: 8px 0 4px;
+}
+
+.message-panel > p:first-child,
+.message-panel > .label-small:first-child {
+  margin-top: 0;
+}
+
+.message-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.chat-input.ff-field {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "label label" "box send" "hint hint";
+  align-items: end;
+  column-gap: 12px;
+  row-gap: 6px;
+  padding: 12px 0 16px;
+  background: var(--ff-ground);
+}
+
+.chat-input-label {
+  grid-area: label;
+}
+
+.chat-input textarea {
+  grid-area: box;
+  min-width: 0;
+}
+
+.chat-input-actions {
+  grid-area: send;
+}
+
+.chat-input-hint {
+  grid-area: hint;
+}
+
+/* Ask with saved chats: the chat list is a column on wide screens and a drawer on narrow ones. */
+
+.ask-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+}
+
+.ask-sessions {
+  display: none;
+}
+
+.ask-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+@media (min-width: 1100px) {
+  .ask-layout {
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+
+  .ask-sessions {
+    display: block;
+    position: sticky;
+    top: 16px;
+    align-self: start;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+  }
+
+  .ask-chats-button {
+    display: none;
+  }
+}
+
+.sessions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.session-item {
+  border-radius: var(--ff-radius-sm);
+  padding: 4px;
+}
+
+.session-open {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: var(--ff-radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.session-open:hover {
+  background: var(--ff-subtle);
+}
+
+.session-open[aria-current="true"] {
+  background: var(--ff-accent-soft);
+}
+
+.session-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.session-time,
+.session-note {
+  font-size: 0.8125rem;
+  color: var(--ff-muted);
+  margin: 0;
+}
+
+.session-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.session-rename {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* A heading and its InfoTip on one line. The heading keeps its own size and margins. */
+
+.heading-with-info {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.heading-with-info > :first-child {
+  margin-bottom: 0;
+}
+
+.heading-with-info + * {
+  margin-top: 8px;
+}
+
+.sessions-title {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.session-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.session-row .session-open {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.session-more {
+  flex: 0 0 auto;
+  letter-spacing: 0.1em;
+}

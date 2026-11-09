@@ -81,7 +81,7 @@ def score_candidates(job_id: JobId, top_n: Annotated[int, Field(ge=1, le=scoring
     """Rank a job's active applications with rubric v1 (see the rubric://scoring/v1 resource).
 
     score = 50% scorecards + 30% must-have ratings + 20% furthest stage, ties
-    by application_id. Each result has the score breakdown, the scorecard and
+    by application_id. Each result has the candidate's source, the score breakdown, the scorecard and
     stage event IDs behind each component, and incomplete_evidence with what
     is missing. Rankings support a hiring decision; people make the decision.
     """

@@ -1,0 +1,112 @@
+{
+  "generated_at": "2026-11-09T23:25:43Z",
+  "git_commit": "59866a8",
+  "git_dirty": false,
+  "tests": {
+    "passed": 402,
+    "failed": 0,
+    "skipped": 0,
+    "total": 402,
+    "duration_s": 3.77
+  },
+  "rbac": {
+    "passed": 28,
+    "total": 28,
+    "result": "pass",
+    "description": "Every logic function run as each of the 6 demo users, against scope from separate SQL."
+  },
+  "mutation": {
+    "caught": 12,
+    "total": 12,
+    "score": 1.0,
+    "ran_at": "2026-11-09T23:25:47Z",
+    "git_commit": "59866a8",
+    "duration_s": 30.9,
+    "mutants": [
+      {
+        "id": "scoring-weights",
+        "file": "app/logic/scoring.py",
+        "what_it_breaks": "Scorecards and must-have match swap weights in the ranking score.",
+        "caught": true,
+        "duration_s": 2.8
+      },
+      {
+        "id": "scoring-order",
+        "file": "app/logic/scoring.py",
+        "what_it_breaks": "Candidates are ranked worst first.",
+        "caught": true,
+        "duration_s": 3.0
+      },
+      {
+        "id": "scoring-scale",
+        "file": "app/logic/scoring.py",
+        "what_it_breaks": "Scorecard points are scaled from 0.25 instead of 0, so strong_no scores above zero.",
+        "caught": true,
+        "duration_s": 3.0
+      },
+      {
+        "id": "task-scorecard-48h",
+        "file": "app/logic/tasks.py",
+        "what_it_breaks": "A missing scorecard becomes a task after 24 hours instead of 48.",
+        "caught": true,
+        "duration_s": 3.3
+      },
+      {
+        "id": "task-reply-2bd",
+        "file": "app/logic/tasks.py",
+        "what_it_breaks": "An unanswered email becomes a task after 3 business days instead of 2.",
+        "caught": true,
+        "duration_s": 3.3
+      },
+      {
+        "id": "task-stage-7d",
+        "file": "app/logic/tasks.py",
+        "what_it_breaks": "An application counts as stuck after 14 days in a stage instead of 7.",
+        "caught": true,
+        "duration_s": 2.1
+      },
+      {
+        "id": "access-manager-teams",
+        "file": "app/access.py",
+        "what_it_breaks": "An HR Manager's allowed_job_ids include jobs on every team.",
+        "caught": true,
+        "duration_s": 1.1
+      },
+      {
+        "id": "access-sql-filter",
+        "file": "app/logic/common.py",
+        "what_it_breaks": "SQL queries stop filtering by allowed_job_ids.",
+        "caught": true,
+        "duration_s": 1.1
+      },
+      {
+        "id": "verify-numbers",
+        "file": "app/agent/verify.py",
+        "what_it_breaks": "The verifier passes answers with numbers no tool returned.",
+        "caught": true,
+        "duration_s": 3.3
+      },
+      {
+        "id": "verify-citations",
+        "file": "app/agent/verify.py",
+        "what_it_breaks": "The verifier passes answers that cite record IDs no tool returned.",
+        "caught": true,
+        "duration_s": 1.2
+      },
+      {
+        "id": "verify-ranking",
+        "file": "app/agent/verify.py",
+        "what_it_breaks": "The verifier passes ranked lists in a different order from score_candidates.",
+        "caught": true,
+        "duration_s": 3.3
+      },
+      {
+        "id": "verify-pii",
+        "file": "app/agent/verify.py",
+        "what_it_breaks": "The verifier passes answers that show an email address or phone number.",
+        "caught": true,
+        "duration_s": 3.3
+      }
+    ]
+  }
+}

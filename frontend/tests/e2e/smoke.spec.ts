@@ -1,8 +1,9 @@
 /**
  * Smoke tests: every demo user lands on a catch-up view that greets them by first name, can
  * open the pages their role allows, gets the not-found page for the ones it does not, can ask
- * a suggested question (against a stubbed /api/ask), and an HR Manager can complete one
- * reassignment.
+ * a suggested question (against a stubbed /api/ask) and sees the trace only as admin, can
+ * hold a follow-up conversation by keyboard on desktop and phone widths, keeps saved chats per
+ * user across reloads and tabs, and an HR Manager can complete one reassignment.
  */
 
 import { expect, test, type Page } from "@playwright/test";
@@ -30,7 +31,7 @@ const PAGES: { path: string; heading: string | RegExp; nav: string; roles: Role[
   { path: "/tasks", heading: "Tasks", nav: "Tasks", roles: ["admin", "hr_manager", "hr_user"] },
   { path: "/sources", heading: "Sources", nav: "Sources", roles: ["admin", "hr_manager"] },
   { path: "/changes", heading: "Changes", nav: "Changes", roles: ["admin", "hr_manager"] },
-  { path: "/quality", heading: "Quality", nav: "Quality", roles: ["admin", "hr_manager", "hr_user"] },
+  { path: "/quality", heading: "Quality", nav: "Quality", roles: ["admin"] },
 ];
 
 const CHIP: Record<Role, string> = {
@@ -48,6 +49,32 @@ async function pickUser(page: Page, label: string) {
 }
 
 const NOT_FOUND = "This page is not available.";
+
+/**
+ * A suggested question on an empty Ask chat. Scoped to the suggestions, because a saved chat
+ * in the list can carry the same question as its title.
+ */
+/**
+ * Open Ask on a new, empty chat. Ask opens the newest saved chat, and earlier tests leave
+ * chats behind in the shared store, so each Ask test starts from a clean chat. Below 1100px
+ * the chat list is in the Chats drawer.
+ */
+async function openNewChat(page: Page) {
+  await page.goto("/ask");
+  await expect(page.getByLabel("Your question")).toBeVisible();
+  if ((page.viewportSize()?.width ?? 1280) < 1100) {
+    await page.getByRole("button", { name: "Chats", exact: true }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "New chat", exact: true }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+  } else {
+    await page.getByRole("button", { name: "New chat", exact: true }).click();
+  }
+  await expect(page).not.toHaveURL(/[?&]c=/);
+}
+
+function suggestion(page: Page, question: string) {
+  return page.getByRole("region", { name: "Try one of these" }).getByRole("button", { name: question });
+}
 
 for (const user of USERS) {
   test(`${user.label}: allowed pages open and others show not found`, async ({ page }) => {
@@ -113,15 +140,162 @@ for (const role of ["admin", "hr_manager", "hr_user"] as Role[]) {
       });
     });
     await pickUser(page, user.label);
-    await page.goto("/ask");
-    await page.getByRole("button", { name: CHIP[role] }).click();
+    await openNewChat(page);
+    await suggestion(page, CHIP[role]).click();
     await expect(page.getByText("Verified", { exact: true })).toBeVisible();
     expect(asked).toEqual([CHIP[role]]);
     await expect(page.getByRole("button", { name: "Open evidence for APP-062" }).first()).toBeVisible();
-    await page.getByText("Behind the scenes").click();
-    await expect(page.getByText("pending_tasks")).toBeVisible();
+    // The stub sends the admin fields to every role, so this checks the page hides the trace.
+    if (role === "admin") {
+      await page.getByRole("button", { name: "Show trace" }).click();
+      await expect(page.getByText("pending_tasks")).toBeVisible();
+    } else {
+      await expect(page.getByRole("button", { name: "Show trace" })).toHaveCount(0);
+    }
   });
 }
+
+/** Stub /api/ask with a numbered answer citing APP-062 and keep each request body. */
+async function stubAsk(page: Page): Promise<Record<string, unknown>[]> {
+  const bodies: Record<string, unknown>[] = [];
+  await page.route("**/api/ask", async (route) => {
+    bodies.push(JSON.parse(route.request().postData() ?? "{}"));
+    await route.fulfill({
+      json: {
+        answer: `Answer ${bodies.length}: start with the offer follow-up [APP-062].\n\n| Candidate | Stage | Days waiting |\n|---|---|---|\n| APP-062 | Offer | 6 |\n| APP-071 | Onsite | 3 |`,
+        status: "answered",
+        verified: true,
+        label: "verified",
+        citations: ["APP-062", "APP-071"],
+        model: "claude-haiku-5-5",
+        as_of: "2026-11-09T17:00:00Z",
+        job_id: null,
+        source: "live",
+      },
+    });
+  });
+  return bodies;
+}
+
+test("a follow-up question sends the earlier turn as history", async ({ page }) => {
+  const bodies = await stubAsk(page);
+  await pickUser(page, "Sam Rivera, HR User");
+  await openNewChat(page);
+  const box = page.getByLabel("Your question");
+  await box.fill("Who is waiting on me?");
+  await box.press("Enter");
+  await expect(page.getByText(/^Answer 1:/)).toBeVisible();
+  await box.fill("And which one is oldest?");
+  await box.press("Enter");
+  await expect(page.getByText(/^Answer 2:/)).toBeVisible();
+  expect(bodies[0].history).toBeUndefined();
+  expect(bodies[1].history).toEqual([
+    { question: "Who is waiting on me?", answer: expect.stringContaining("Answer 1:"), citations: ["APP-062", "APP-071"] },
+  ]);
+});
+
+test("the conversation works by keyboard alone", async ({ page }) => {
+  await stubAsk(page);
+  await pickUser(page, "Sam Rivera, HR User");
+  await openNewChat(page);
+  await expect(page.getByLabel("Your question")).toBeVisible();
+  for (let i = 0; i < 200 && !(await page.getByLabel("Your question").evaluate((el) => el === document.activeElement)); i++) {
+    await page.keyboard.press("Tab");
+  }
+  await expect(page.getByLabel("Your question")).toBeFocused();
+  await page.keyboard.type("What should I do today?");
+  await page.keyboard.press("Enter");
+  await expect(page.getByText(/^Answer 1:/)).toBeVisible();
+  const toggle = page.getByRole("button", { name: "Show evidence" });
+  for (let i = 0; i < 200 && !(await toggle.evaluate((el) => el === document.activeElement)); i++) {
+    await page.keyboard.press("Shift+Tab");
+  }
+  await expect(toggle).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(page.getByRole("button", { name: "Hide evidence" })).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByText("Records cited")).toBeVisible();
+});
+
+test("at phone width the Ask page never scrolls sideways", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 740 });
+  await stubAsk(page);
+  await pickUser(page, "Sam Rivera, HR User");
+  await openNewChat(page);
+  const box = page.getByLabel("Your question");
+  await box.fill("Who is waiting on me?");
+  await box.press("Enter");
+  await expect(page.getByText(/^Answer 1:/)).toBeVisible();
+  await page.getByRole("button", { name: "Show evidence" }).click();
+  const [scroll, inner] = await page.evaluate(() => [document.scrollingElement!.scrollWidth, window.innerWidth]);
+  expect(scroll).toBeLessThanOrEqual(inner);
+  // Send stays on the same row as the question box.
+  const boxArea = (await box.boundingBox())!;
+  const send = (await page.getByRole("button", { name: "Send" }).boundingBox())!;
+  expect(send.y).toBeLessThan(boxArea.y + boxArea.height);
+  // New chat in the Chats drawer closes the drawer.
+  await page.getByRole("button", { name: "Chats" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "New chat", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
+// Runs before the reassignment test, which can change Sam Rivera's scope and so the recordings that match.
+test("a saved chat survives reloads and new tabs, stays with its user, and can be renamed and deleted", async ({ page, context }) => {
+  const name = `Saved chat ${Date.now()}`;
+  const panel = () => page.getByRole("navigation", { name: "Saved chats" });
+  await pickUser(page, "Sam Rivera, HR User");
+  await openNewChat(page);
+  await suggestion(page, CHIP.hr_user).click();
+  await expect(page.getByText("Recorded answer", { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/[?&]c=CONV-[a-z0-9]{12}/);
+  const answer = (await page.locator(".bubble-assistant .answer").first().innerText()).slice(0, 40);
+
+  await panel().getByRole("button", { name: `More actions for ${CHIP.hr_user}` }).first().click();
+  await page.getByRole("menuitem", { name: "Rename" }).click();
+  await page.getByLabel(`New name for ${CHIP.hr_user}`).fill(name);
+  await page.getByLabel(`New name for ${CHIP.hr_user}`).press("Enter");
+  await expect(panel().getByRole("button", { name: new RegExp(`^${name}`) })).toHaveAttribute("aria-current", "true");
+
+  await page.reload();
+  await expect(page.getByText(answer, { exact: false })).toBeVisible();
+
+  const second = await context.newPage();
+  await second.goto("/ask");
+  await expect(second.getByText(answer, { exact: false })).toBeVisible();
+  await expect(second.getByRole("navigation", { name: "Saved chats" }).getByRole("button", { name: new RegExp(`^${name}`) })).toBeVisible();
+  await second.close();
+
+  await pickUser(page, "Alex Chen, HR User");
+  await page.goto("/ask");
+  await expect(panel()).toBeVisible();
+  await expect(panel().getByText(name)).toHaveCount(0);
+
+  await pickUser(page, "Sam Rivera, HR User");
+  await page.goto("/ask");
+  await expect(panel().getByRole("button", { name: new RegExp(`^${name}`) })).toBeVisible();
+
+  await panel().getByRole("button", { name: `More actions for ${name}` }).click();
+  await page.getByRole("menuitem", { name: "Delete" }).click();
+  await panel().getByRole("group", { name: `Delete ${name}?` }).getByRole("button", { name: "Delete" }).click();
+  await expect(panel().getByText(name)).toHaveCount(0);
+  await page.reload();
+  await expect(panel()).toBeVisible();
+  await expect(panel().getByText(name)).toHaveCount(0);
+});
+
+test("an InfoTip opens on a tap and closes on a tap outside", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 375, height: 740 }, hasTouch: true, isMobile: true, baseURL: "http://localhost:3000" });
+  const page = await context.newPage();
+  await pickUser(page, "Sam Rivera, HR User");
+  await page.goto("/tasks");
+  // Wait for the tasks to load, so the page is interactive before the tap.
+  await expect(page.getByRole("heading", { name: "Rules for derived tasks" })).toBeVisible();
+  await page.getByRole("button", { name: "About Tasks" }).tap();
+  const tip = page.getByText("Overdue and pending work, most overdue first.");
+  await expect(tip).toBeVisible();
+  await page.getByRole("heading", { level: 1, name: "Tasks" }).tap();
+  await expect(tip).toBeHidden();
+  await context.close();
+});
 
 test("an HR Manager reassigns a job and the change log records it", async ({ page }) => {
   await pickUser(page, "Priya Raman, HR Manager");

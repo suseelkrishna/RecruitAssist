@@ -3,21 +3,22 @@
 /**
  * What happened to produce an answer: each tool called with its input and the rows it
  * returned, then tokens, cache hits, latency, and estimated cost, all as the API reports them.
+ * The Ask page shows it to admin only, under "Show trace", and the API sends these fields only to admin.
  */
 
-import { Accordion, DataTable } from "@suseelkrishna/fieryfusion-react";
+import { DataTable } from "@suseelkrishna/fieryfusion-react";
 import { formatDateTime, show } from "@/lib/format";
 import { toolName } from "@/lib/tools";
 import type { AskResult } from "@/lib/types";
 
 export function BehindTheScenes({ result }: { result: AskResult }) {
   const usage = result.usage;
-  const content = (
+  return (
     <>
       <DataTable
         caption="Tools called"
         columns={["Tool", "Input", "Rows returned", "Time"]}
-        rows={result.steps.map((s) => [
+        rows={(result.steps ?? []).map((s) => [
           <span key="tool">
             {toolName(s.tool)} <span className="mono muted">{s.tool}</span>
           </span>,
@@ -52,5 +53,4 @@ export function BehindTheScenes({ result }: { result: AskResult }) {
       </dl>
     </>
   );
-  return <Accordion items={[{ title: "Behind the scenes", content }]} />;
 }

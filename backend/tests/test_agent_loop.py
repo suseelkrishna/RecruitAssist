@@ -6,6 +6,8 @@ database; only the model is faked.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from app import access
@@ -151,3 +153,64 @@ async def test_out_of_scope_job_fails_before_any_model_call():
     with pytest.raises(Exception, match="JOB-2 is not in your scope"):
         await run
     assert client.requests == []
+
+
+# Follow-ups: history in the user turn, and the verifier checking only this turn's tool results.
+
+def answer_from_ranking(params):
+    """A scripted model: rank JOB-1 again, then cite the top application the tool returned."""
+    last = params["messages"][-1]
+    if isinstance(last["content"], str):
+        return reply(tool_use("t1", "score_candidates", {"job_id": "JOB-1"}), stop="tool_use")
+    ranked = json.loads(last["content"][0]["content"])["ranked"]
+    return reply(text(f"The top candidate is still {ranked[0]['application_id']}."))
+
+
+async def test_history_and_its_citations_are_in_the_user_turn():
+    history = [{"question": "Top candidates for JOB-1?", "answer": "APP-001 leads.", "citations": ["APP-001", "SC-001"]},
+               {"question": "And the next one?", "answer": "No records cited here."}]
+    run, client = ask([reply(text("Nothing to count."))], history=history)
+    await run
+    turn = client.requests[0]["messages"][0]["content"]
+    assert "Q: Top candidates for JOB-1?\nA: APP-001 leads.\nRecords cited: APP-001, SC-001" in turn
+    assert "Q: And the next one?\nA: No records cited here.\n\nQuestion:" in turn
+    assert "Numbers here are not evidence for this turn; call the tools again" in turn
+
+
+async def test_history_past_the_character_cap_drops_the_oldest_pairs():
+    long = "x" * 1400
+    history = [{"question": f"q{i}", "answer": long} for i in range(6)]
+    run, client = ask([reply(text("Nothing to count."))], history=history)
+    await run
+    turn = client.requests[0]["messages"][0]["content"]
+    kept = [i for i in range(6) if f"Q: q{i}\n" in turn]
+    # Each pair is about 1408 characters, so 4 fit in 6000 and the 2 oldest are dropped.
+    assert kept == [2, 3, 4, 5]
+    assert loop.MAX_HISTORY_CHARS == 6000
+
+
+async def test_a_follow_up_citing_an_id_only_from_history_fails_the_citation_check():
+    history = [{"question": "Who leads JOB-1?", "answer": "APP-001 leads.", "citations": ["APP-001"]}]
+    run, _ = ask([reply(text("As before, APP-001 leads.")), reply(text("As before, APP-001 leads."))],
+                 question="Who leads?", history=history)
+    result = await run
+    assert not result["verified"]
+    assert result["verifier"]["checks"]["citations"]["unknown"] == ["APP-001"]
+
+
+async def test_a_follow_up_that_ranks_again_passes():
+    history = [{"question": "Who leads JOB-1?", "answer": "Someone leads.", "citations": []}]
+    run, _ = ask(answer_from_ranking, question="Is that still true?", history=history)
+    result = await run
+    assert result["verified"] and [s["tool"] for s in result["steps"]] == ["score_candidates"]
+
+
+async def test_history_about_an_out_of_scope_job_does_not_widen_scope():
+    history = [{"question": "Top candidates for JOB-2?", "answer": "JOB-2 is led by APP-010.",
+                "citations": ["JOB-2", "APP-010"]}]
+    run, client = ask([reply(tool_use("t1", "score_candidates", {"job_id": "JOB-2"}), stop="tool_use"),
+                       reply(text("I cannot see that job."))], question="And now?", history=history)
+    result = await run
+    tool_result = client.requests[1]["messages"][-1]["content"][0]
+    assert tool_result["is_error"] and "JOB-2 is not in your scope" in tool_result["content"]
+    assert result["steps"][0]["is_error"]

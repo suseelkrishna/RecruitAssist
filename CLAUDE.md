@@ -40,7 +40,8 @@ backend/                      FastAPI + Python 3.12 + uv (Vercel project 2)
   app/llm/                    the LLM interface: Anthropic and OpenAI adapters, models.json (providers and prices)
   data/                       generate.py, schema.sql, recruiting.db (committed), recordings.json
   evals/                      expected.py, questions.json, run.py, grade.py, judge.py, judge_rubric.md,
-                              report.py, results.md, scoreboard.json (raw runs go to evals_out/, ignored)
+                              report.py, results.md, scoreboard.json, multi_tool.json, quality_snapshot.py, quality.json
+                              (raw runs go to evals_out/, ignored)
   tests/
 README.md
 CLAUDE.md
@@ -72,8 +73,10 @@ Ask follows a slightly different path: from `main.py` it goes to `agent/loop.py`
 cd backend && uv sync && uv run python data/generate.py && uv run pytest -q
 cd backend && uv run fastapi dev app/main.py                 # http://localhost:8000
 cd backend && uv run python -m app.agent.cli "Which tasks are pending or overdue?"
+cd backend && uv run python evals/quality_snapshot.py                 # tests, RBAC, 12 planted bugs -> evals/quality.json
 cd backend && uv run python evals/run.py --models claude-haiku-5-5 claude-sonnet-5-5 claude-opus-5-5
 cd backend && uv run python evals/run.py --models gpt-6-luna gpt-6.1-terra gpt-6.1-sol --resume evals_out/<stamp>/runs.jsonl
+cd backend && uv run python evals/run.py --group multi_tool --models claude-haiku-5-5 --efforts low --repeats 1
 cd frontend && npm ci && npm run dev                         # http://localhost:3000, needs NPM_TOKEN for the brand kit
 claude mcp add recruitassist --scope user -- "$PWD/backend/.venv/bin/python" "$PWD/backend/app/mcp_server.py"
 ```
@@ -116,7 +119,7 @@ claude mcp add recruitassist --scope user -- "$PWD/backend/.venv/bin/python" "$P
 
 **Secrets and committed files**
 - Keep secrets out of code, logs, and the browser. Only `NEXT_PUBLIC_*` variables reach the browser, and none of them are secret.
-- Never commit `.env*` files, eval transcripts, or caches. The one generated file that is committed is `backend/data/recruiting.db`, because it is deterministic.
+- Never commit `.env*` files, eval transcripts, or caches. Two generated files are committed: `backend/data/recruiting.db`, because it is deterministic, and `backend/evals/quality.json`, because the deployed quality page reads it instead of running tests per request.
 
 **Writing and repo hygiene**
 - UI copy and docs are in plain English for non-technical readers. Never use em dashes anywhere.

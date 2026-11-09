@@ -39,6 +39,7 @@ DEFAULT_EFFORT = "low"
 MAX_ROUNDS = 6
 MAX_HISTORY_PAIRS = 6
 MAX_HISTORY_ANSWER_CHARS = 1500
+MAX_HISTORY_CHARS = 6000
 MAX_TOKENS = 16000
 
 # The Anthropic request details (cache breakpoints, adaptive thinking, the refusal fallback beta)
@@ -68,7 +69,7 @@ def make_client(model: str | None = None, purpose: str = "app") -> llm.LLMClient
 
 
 async def run_agent(question: str, principal: Principal, job_id: str | None = None,
-                    history: list[dict[str, str]] | None = None, model: str | None = None,
+                    history: list[dict[str, Any]] | None = None, model: str | None = None,
                     client: Any = None, effort: str | None = None) -> dict[str, Any]:
     """Answer one question for one principal and return the full, verified result.
 
@@ -129,11 +130,12 @@ async def tool_specs(session: Client) -> list[dict[str, Any]]:
 
 
 def user_turn(question: str, context: dict[str, Any], job_id: str | None,
-              history: list[dict[str, str]]) -> str:
+              history: list[dict[str, Any]]) -> str:
     """The one user message: scope card, as_of, selected job, recent history, then the question.
 
-    History holds only earlier questions and answers (never raw tool results), at most
-    MAX_HISTORY_PAIRS pairs, with long answers cut.
+    History holds only earlier questions, answers, and the record IDs they cited (never raw
+    tool results), at most MAX_HISTORY_PAIRS pairs, with long answers cut and the oldest
+    pairs dropped until the history fits in MAX_HISTORY_CHARS.
     """
     parts = [
         "Scope card for this user (computed by the tools):",
@@ -141,14 +143,23 @@ def user_turn(question: str, context: dict[str, Any], job_id: str | None,
         f"as_of: {context['as_of']}",
         f"Selected job: {job_id or 'none'}",
     ]
-    recent = history[-MAX_HISTORY_PAIRS:]
+    recent = [history_text(pair) for pair in history[-MAX_HISTORY_PAIRS:]]
+    while recent and sum(len(p) for p in recent) > MAX_HISTORY_CHARS:
+        recent.pop(0)
     if recent:
         parts.append("Earlier in this conversation (oldest first). Numbers here are not evidence for "
                      "this turn; call the tools again:")
-        for pair in recent:
-            parts.append(f"Q: {pair.get('question', '')}\nA: {pair.get('answer', '')[:MAX_HISTORY_ANSWER_CHARS]}")
+        parts += recent
     parts.append(f"Question: {question}")
     return "\n\n".join(parts)
+
+
+def history_text(pair: dict[str, Any]) -> str:
+    """One earlier question and answer as text, with the record IDs the answer cited."""
+    text = f"Q: {pair.get('question', '')}\nA: {pair.get('answer', '')[:MAX_HISTORY_ANSWER_CHARS]}"
+    if pair.get("citations"):
+        text += f"\nRecords cited: {', '.join(pair['citations'])}"
+    return text
 
 
 async def converse(client: llm.LLMClient, model: str, effort: str, tools: list[dict[str, Any]],

@@ -10,7 +10,10 @@ Checks run on every answer:
   scope      every cited record belongs to a job in the asking user's scope
   pii        no email address or phone number appears
 Checks run when the question lists them (see the key in evals/expected.py):
-  numbers, ids, ids_absent, ranking (top and order), tools, mentions, forbidden
+  numbers, ids, ids_absent, ranking (top and order), tools, mentions, forbidden,
+  tool_calls (the number of tool calls is within min and max), and
+  tool_order (for each pair [a, b], some call of b comes after the first call of a)
+The result also records whether the app's verifier labeled the answer verified.
 """
 
 from __future__ import annotations
@@ -142,6 +145,15 @@ def grade(question: dict[str, Any], result: dict[str, Any], scope: list[str],
     if "tools" in checks:
         absent = [t for t in checks["tools"] if not called & set(t.split("|"))]
         record("tools", not absent, f"did not call {', '.join(absent)}")
+    if "tool_calls" in checks:
+        count, bounds = len(result.get("steps", [])), checks["tool_calls"]
+        record("tool_calls", bounds["min"] <= count <= bounds["max"],
+               f"{count} calls, expected {bounds['min']} to {bounds['max']}")
+    if "tool_order" in checks:
+        sequence = [s["tool"] for s in result.get("steps", [])]
+        for first, then in checks["tool_order"]:
+            ok = first in sequence and then in sequence[sequence.index(first) + 1:]
+            record("tool_order", ok, f"{then} was not called after {first}")
     if "mentions" in checks:
         absent = [p for p in checks["mentions"] if not re.search(p, answer, re.I)]
         record("mentions", not absent, f"no match for {', '.join(absent)}")
@@ -151,4 +163,5 @@ def grade(question: dict[str, Any], result: dict[str, Any], scope: list[str],
     if result.get("status") not in ("answered", "refused"):
         record("status", False, result.get("status") or "error")
 
-    return {"passed": all(outcome.values()), "checks": outcome, "reasons": reasons}
+    return {"passed": all(outcome.values()), "checks": outcome, "reasons": reasons,
+            "verified": bool(result.get("verified")), "tool_calls": len(result.get("steps", []))}

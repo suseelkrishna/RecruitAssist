@@ -1,0 +1,170 @@
+{
+ "group": "multi_tool",
+ "generated_at": "2026-11-09T23:11:02Z",
+ "as_of": "2026-11-09T17:00:00Z",
+ "data_hash": "e6c74753bb7687e6cddd0ebbe626fbfb12bbf44140d6c03cdd88349eafc6e249",
+ "model": "claude-haiku-5-5",
+ "effort": "low",
+ "runs": 12,
+ "passed": 12,
+ "pass_rate_pct": 100.0,
+ "verified_rate_pct": 100.0,
+ "verified_pass_rate_pct": 100.0,
+ "tool_calls_per_question": 3.6,
+ "cost_per_question_usd": 0.0025,
+ "total_cost_usd": 0.0296,
+ "latency_p50_s": 8.5,
+ "questions": [
+  {
+   "id": "mt-behind-leak-top3",
+   "user": "USR-1",
+   "passed": true,
+   "verified": true,
+   "tools": [
+    "list_jobs",
+    "pipeline_by_job",
+    "integration_health",
+    "funnel_dropoff",
+    "score_candidates",
+    "pending_tasks"
+   ],
+   "reasons": []
+  },
+  {
+   "id": "mt-compare-tops",
+   "user": "USR-2",
+   "passed": true,
+   "verified": true,
+   "tools": [
+    "score_candidates",
+    "score_candidates",
+    "integration_health"
+   ],
+   "reasons": []
+  },
+  {
+   "id": "mt-followup-fourth",
+   "user": "USR-1",
+   "passed": true,
+   "verified": true,
+   "tools": [
+    "score_candidates",
+    "integration_health"
+   ],
+   "reasons": []
+  },
+  {
+   "id": "mt-followup-other-job",
+   "user": "USR-1",
+   "passed": true,
+   "verified": true,
+   "tools": [
+    "score_candidates"
+   ],
+   "reasons": []
+  },
+  {
+   "id": "mt-integration-impact",
+   "user": "USR-1",
+   "passed": true,
+   "verified": true,
+   "tools": [
+    "integration_health",
+    "pending_tasks"
+   ],
+   "reasons": []
+  },
+  {
+   "id": "mt-mixed-scope",
+   "user": "USR-4",
+   "passed": true,
+   "verified": true,
+   "tools": [
+    "funnel_dropoff",
+    "pipeline_by_job",
+    "pending_tasks",
+    "integration_health"
+   ],
+   "reasons": []
+  },
+  {
+   "id": "mt-offers-days-open",
+   "user": "USR-1",
+   "passed": true,
+   "verified": true,
+   "tools": [
+    "pending_tasks",
+    "pipeline_by_job",
+    "score_candidates",
+    "get_candidate_evidence",
+    "get_candidate_evidence"
+   ],
+   "reasons": []
+  },
+  {
+   "id": "mt-overdue-integration",
+   "user": "USR-1",
+   "passed": true,
+   "verified": true,
+   "tools": [
+    "pending_tasks",
+    "integration_health",
+    "get_candidate_evidence",
+    "get_candidate_evidence"
+   ],
+   "reasons": []
+  },
+  {
+   "id": "mt-overloaded-recruiter-leak",
+   "user": "USR-2",
+   "passed": true,
+   "verified": true,
+   "tools": [
+    "recruiter_load",
+    "list_jobs",
+    "funnel_dropoff"
+   ],
+   "reasons": []
+  },
+  {
+   "id": "mt-source-in-top3",
+   "user": "USR-1",
+   "passed": true,
+   "verified": true,
+   "tools": [
+    "source_quality",
+    "score_candidates",
+    "get_candidate_evidence",
+    "get_candidate_evidence",
+    "get_candidate_evidence"
+   ],
+   "reasons": []
+  },
+  {
+   "id": "mt-stuck-candidates",
+   "user": "USR-4",
+   "passed": true,
+   "verified": true,
+   "tools": [
+    "pending_tasks"
+   ],
+   "reasons": []
+  },
+  {
+   "id": "mt-withdrawals-by-source",
+   "user": "USR-1",
+   "passed": true,
+   "verified": true,
+   "tools": [
+    "funnel_dropoff",
+    "get_candidate_evidence",
+    "get_candidate_evidence",
+    "get_candidate_evidence",
+    "get_candidate_evidence",
+    "get_candidate_evidence",
+    "get_candidate_evidence"
+   ],
+   "reasons": []
+  }
+ ]
+}

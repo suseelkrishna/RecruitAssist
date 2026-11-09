@@ -16,12 +16,7 @@ import { getTasks } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import type { BoardTask, TasksResponse } from "@/lib/types";
 import { useLoad } from "@/lib/useLoad";
-
-const GROUP_HEADINGS: Record<TasksResponse["group_by"], string> = {
-  team: "Grouped by team",
-  owner: "Grouped by recruiter",
-  none: "Your tasks",
-};
+import { HeadingWithInfo } from "@/components/HeadingWithInfo";
 
 /** "Explicit" for a row in the tasks table, "Derived" for a task found in the records. */
 function Kind({ task }: { task: BoardTask }) {
@@ -78,8 +73,7 @@ export default function TasksPage() {
     <AppShell>
       <div className="page-head">
         <div>
-          <h1>Tasks</h1>
-          <p>Overdue and pending work, most overdue first.</p>
+          <HeadingWithInfo as="h1" title="Tasks" info="Overdue and pending work, most overdue first." />
         </div>
       </div>
       {result.state === "loading" && <LoadingSkeleton blocks={2} label="Loading tasks" />}
@@ -91,15 +85,13 @@ export default function TasksPage() {
           <Empty title="Nothing pending" description="There are no pending or overdue tasks in your scope." />
         ) : (
           <Stack gap={16} className="fade-in">
-            <p className="muted">
-              {GROUP_HEADINGS[result.data.group_by]}. {tasksLabel(result.data.count, result.data.overdue_count)}.
-            </p>
             {result.data.groups.map((g) => (
               <Card key={g.key} title={g.label} description={tasksLabel(g.count, g.overdue_count)}>
                 <TaskTable tasks={g.tasks} caption={`Tasks: ${g.label}`} />
               </Card>
             ))}
-            <Card title="Rules for derived tasks" description="Derived tasks come from the records when one of these rules fires.">
+            <Card>
+              <HeadingWithInfo as="h3" title="Rules for derived tasks" info="Derived tasks come from the records when one of these rules fires." />
               <dl className="kv">
                 {Object.entries(result.data.rules).map(([id, text]) => (
                   <div key={id} style={{ display: "contents" }}>

@@ -33,10 +33,15 @@ def test_recordings_match_on_normalized_question(tmp_path):
 def test_quality_report_lists_missing_files(tmp_path, monkeypatch):
     monkeypatch.setattr(quality, "QUALITY", tmp_path / "quality.json")
     monkeypatch.setattr(quality, "SCOREBOARD", tmp_path / "scoreboard.json")
-    monkeypatch.setattr(quality, "BACKEND", tmp_path)
     report = quality.quality_report()
-    assert report["tests"] is None and len(report["missing"]) == 4
-    (tmp_path / "quality.json").write_text('{"tests": {"passed": 5}, "mutation_score": 0.8, "rbac": "pass"}')
+    assert report["tests"] is None and report["missing"] == ["tests", "rbac", "mutation", "scoreboard"]
+    assert all("quality_snapshot.py" in report["reasons"][k] for k in ("tests", "rbac", "mutation"))
+    assert "run.py" in report["reasons"]["scoreboard"]
+    (tmp_path / "quality.json").write_text(
+        '{"generated_at": "2026-11-09T22:00:00Z", "git_commit": "abc1234", "git_dirty": false,'
+        ' "tests": {"passed": 5, "total": 5}, "rbac": {"result": "pass"},'
+        ' "mutation": {"caught": 11, "total": 12, "ran_at": "2026-11-09T21:00:00Z"}}')
     report = quality.quality_report()
-    assert report["mutation_score"] == 0.8 and report["missing"] == ["scoreboard (no scoreboard.json yet)"]
+    assert report["mutation"]["ran_at"] == "2026-11-09T21:00:00Z" and report["git_commit"] == "abc1234"
+    assert report["missing"] == ["scoreboard"] and list(report["reasons"]) == ["scoreboard"]
     assert report["tests_defined"] > 0

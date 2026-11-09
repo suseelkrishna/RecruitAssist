@@ -3,13 +3,15 @@
 /**
  * One dashboard chart: a title, the one-line takeaway written by the API, a "View as table"
  * switch that shows the same rows as a table, and an "Ask about this" link that opens /ask
- * with a question filled in. `chart` is the drawing; `controls` sit above it and `children`
- * below it in both views, so buttons stay reachable from the keyboard.
+ * with a question filled in. `info` explains how to read the chart, in an InfoTip after the
+ * title. `chart` is the drawing; `controls` sit above it and `children` below it in both
+ * views, so buttons stay reachable from the keyboard.
  */
 
 import { ButtonLink, Card, DataTable, Switch } from "@suseelkrishna/fieryfusion-react";
 import Link from "next/link";
 import { useId, useState, type ReactNode } from "react";
+import { HeadingWithInfo } from "@/components/HeadingWithInfo";
 
 export type TableView = { columns: string[]; rows: ReactNode[][] };
 
@@ -23,6 +25,7 @@ export function ChartCard({
   chart,
   controls,
   children,
+  info,
 }: {
   anchor: string;
   title: string;
@@ -33,14 +36,13 @@ export function ChartCard({
   chart?: ReactNode;
   controls?: ReactNode;
   children?: ReactNode;
+  info?: string;
 }) {
   const [asTable, setAsTable] = useState(false);
   const headingId = useId();
   return (
     <Card id={anchor} aria-labelledby={headingId}>
-      <h2 id={headingId} className="chart-title">
-        {title}
-      </h2>
+      <HeadingWithInfo id={headingId} className="chart-title" title={title} info={info} />
       <p className="takeaway">{takeaway}</p>
       <div className="chart-actions">
         {!empty && <Switch label="View as table" checked={asTable} onCheckedChange={setAsTable} />}

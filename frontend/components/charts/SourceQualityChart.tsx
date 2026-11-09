@@ -24,6 +24,7 @@ export function SourceQualityChart({ data }: { data: DashboardResponse }) {
       anchor="source-quality"
       title="Source quality"
       takeaway={metric.takeaway}
+      info="Bars show the share of applicants who reached Onsite. The number in brackets is how many applied."
       question="Which sources bring the best candidates?"
       empty={metric.sources.length === 0}
       table={{
@@ -43,10 +44,6 @@ export function SourceQualityChart({ data }: { data: DashboardResponse }) {
           </BarChart>
         </ResponsiveContainer>
       }
-    >
-      <p className="muted" style={{ fontSize: "0.875rem", margin: "4px 0 0" }}>
-        Bars show the share of applicants who reached Onsite. The number in brackets is how many applied.
-      </p>
-    </ChartCard>
+    />
   );
 }

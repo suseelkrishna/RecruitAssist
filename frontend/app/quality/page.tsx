@@ -1,19 +1,25 @@
 "use client";
 
 /**
- * Quality from GET /api/quality: test counts, the mutation score, the access matrix result,
- * and the eval scoreboard per model, with the date they were produced. These come from report
- * files the backend reads; a report that has not been produced yet shows as not run.
+ * Quality from GET /api/quality: test counts, the access matrix result, the mutation check,
+ * and the eval scoreboard per model, with the date and git commit they were measured at. These come
+ * from report files the backend reads (evals/quality.json, written by evals/quality_snapshot.py);
+ * a report that has not been produced yet shows "Not available" with the reason. Admin only:
+ * other roles get the not-found page because the API answers 404.
  */
 
-import { Card, DataTable, Stack, StatusPill } from "@suseelkrishna/fieryfusion-react";
+import { DataTable, Stack, StatusPill } from "@suseelkrishna/fieryfusion-react";
+import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { AppShell } from "@/components/AppShell";
-import { isScoreboard, Scoreboard } from "@/components/Scoreboard";
+import { isScoreboard, Scoreboard, scoreboardInfo } from "@/components/Scoreboard";
+import { ReportCard } from "@/components/ReportCard";
 import { ErrorState, LoadingSkeleton } from "@/components/PageStates";
 import { getQuality } from "@/lib/api";
 import { formatDateTime, words } from "@/lib/format";
+import type { QualityResponse } from "@/lib/types";
 import { useLoad } from "@/lib/useLoad";
+import { HeadingWithInfo } from "@/components/HeadingWithInfo";
 
 /** Show a report value as the API gives it: a list of rows as a table, an object as labeled fields. */
 function Value({ value, caption }: { value: unknown; caption: string }): ReactNode {
@@ -49,53 +55,103 @@ function Value({ value, caption }: { value: unknown; caption: string }): ReactNo
   return <span>{String(value)}</span>;
 }
 
-/** One report section, or a note that the report has not been produced yet. */
-function Section({ title, value, missing, children }: { title: string; value: unknown; missing: string | undefined; children?: ReactNode }) {
+type Mutation = {
+  caught: number;
+  total: number;
+  ran_at: string;
+  mutants: { id: string; file: string; what_it_breaks: string; caught: boolean }[];
+};
+
+/** True when the mutation block has the fields the mutation card shows. */
+function isMutation(value: unknown): value is Mutation {
+  return !!value && typeof value === "object" && Array.isArray((value as Mutation).mutants);
+}
+
+/** The mutation card body: how many planted bugs the tests caught, when, and one row per bug. */
+function MutationResult({ mutation }: { mutation: Mutation }) {
   return (
-    <Card title={title} className="quality-card">
-      {value === null || value === undefined ? (
-        <StatusPill tone="info">Not run yet</StatusPill>
-      ) : (
-        (children ?? <Value value={value} caption={title} />)
-      )}
-      {missing && (
-        <p className="muted" style={{ marginBottom: 0 }}>
-          This report has not been produced yet.
-        </p>
-      )}
-    </Card>
+    <Stack gap={12}>
+      <p style={{ margin: 0 }}>
+        <strong>
+          {mutation.caught} of {mutation.total}
+        </strong>{" "}
+        planted bugs caught by the tests.
+      </p>
+      <p className="muted quality-meta">Ran {formatDateTime(mutation.ran_at)}.</p>
+      <DataTable
+        caption="Planted bugs"
+        columns={["Bug", "What it breaks", "Result"]}
+        rows={mutation.mutants.map((m) => [
+          <span className="mono" key="id">
+            {m.id}
+          </span>,
+          m.what_it_breaks,
+          m.caught ? (
+            <StatusPill key="r" tone="success">
+              Caught
+            </StatusPill>
+          ) : (
+            <StatusPill key="r" tone="danger">
+              Not caught
+            </StatusPill>
+          ),
+        ])}
+      />
+    </Stack>
   );
+}
+
+/** "Measured <date> at commit <hash>", noting uncommitted changes, or a note that nothing was measured. */
+function measuredAt(data: QualityResponse): string {
+  if (!data.generated_at) return "Test reports have not been produced yet.";
+  const commit = data.git_commit ? ` at commit ${data.git_commit}${data.git_dirty ? " with uncommitted changes" : ""}` : "";
+  return `Measured ${formatDateTime(data.generated_at)}${commit}.`;
 }
 
 export default function QualityPage() {
   const result = useLoad(getQuality, "quality");
-  const missingFor = (key: string) => (result.state === "ready" ? result.data.missing.find((m) => m.startsWith(key)) : undefined);
+  if (result.state === "not_found") notFound();
+  const reason = (key: string) => (result.state === "ready" ? result.data.reasons[key] : undefined);
   return (
     <AppShell>
       <div className="page-head">
         <div>
-          <h1>Quality</h1>
-          <p>How the backend and the assistant are tested.</p>
+          <HeadingWithInfo as="h1" title="Quality" info="How the backend and the assistant are tested. These numbers come from report files produced by the test and eval scripts." />
+          {result.state === "ready" && <p className="muted quality-meta">{measuredAt(result.data)}</p>}
         </div>
       </div>
       {result.state === "loading" && <LoadingSkeleton blocks={4} label="Loading quality" />}
-      {(result.state === "error" || result.state === "not_found") && (
-        <ErrorState message={result.state === "error" ? result.message : "Quality could not be loaded."} onRetry={result.reload} />
-      )}
+      {result.state === "error" && <ErrorState message={result.message} onRetry={result.reload} />}
       {result.state === "ready" && (
         <Stack gap={16} className="fade-in">
-          <p className="muted">
-            {result.data.generated_at ? `Test reports produced ${formatDateTime(result.data.generated_at)}.` : "Test reports have not been produced yet."}{" "}
-            The backend defines {result.data.tests_defined} test functions.
-          </p>
+          <p className="muted">The backend defines {result.data.tests_defined} test functions.</p>
           <div className="grid grid-2">
-            <Section title="Test results" value={result.data.tests} missing={missingFor("tests")} />
-            <Section title="Mutation score" value={result.data.mutation_score} missing={missingFor("mutation_score")} />
-            <Section title="Access matrix" value={result.data.rbac} missing={missingFor("rbac")} />
+            <ReportCard title="Test results" value={result.data.tests} reason={reason("tests")}>
+              <Value value={result.data.tests} caption="Test results" />
+            </ReportCard>
+            <ReportCard title="Access matrix" value={result.data.rbac} reason={reason("rbac")}>
+              <Value value={result.data.rbac} caption="Access matrix" />
+            </ReportCard>
           </div>
-          <Section title="Eval scoreboard by model" value={result.data.scoreboard} missing={missingFor("scoreboard")}>
-            {isScoreboard(result.data.scoreboard) ? <Scoreboard report={result.data.scoreboard} /> : undefined}
-          </Section>
+          <ReportCard title="Mutation check" value={result.data.mutation} reason={reason("mutation")}>
+            {isMutation(result.data.mutation) ? (
+              <MutationResult mutation={result.data.mutation} />
+            ) : (
+              <Value value={result.data.mutation} caption="Mutation check" />
+            )}
+          </ReportCard>
+          <ReportCard
+            title="Eval scoreboard by model"
+            value={result.data.scoreboard}
+            reason={reason("scoreboard")}
+            info={isScoreboard(result.data.scoreboard) ? scoreboardInfo(result.data.scoreboard) : undefined}
+          >
+            {isScoreboard(result.data.scoreboard) ? (
+              <Scoreboard report={result.data.scoreboard} />
+            ) : (
+              <Value value={result.data.scoreboard} caption="Eval scoreboard by model" />
+            )}
+          </ReportCard>
         </Stack>
       )}
     </AppShell>

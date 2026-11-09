@@ -41,14 +41,16 @@ The four closed jobs give time to fill, offer acceptance, and trends some histor
 | | Admin | HR Manager | HR User |
 |---|---|---|---|
 | Jobs in scope | All 7 | Jobs on teams they manage | Jobs assigned to them as recruiter |
-| Dashboard, Ask, Jobs, Tasks, Quality | Yes | Yes | Yes |
+| Dashboard, Ask, Jobs, Tasks | Yes | Yes | Yes |
 | Sources and Changes pages | Yes | Yes | No |
+| Quality page | Yes | No | No |
+| Show trace on Ask answers (tools, tokens, cost) | Yes | No | No |
 | `recruiter_load` tool | Yes | Yes | No |
 | Reassign a job's recruiter | Any job | Jobs on their teams | No |
 
 Scope for each demo user: Suseel Maddali sees all 7 jobs, Priya Raman sees 4, Daniel Okafor 3, Sam Rivera 3, Alex Chen 2, and Jordan Patel 2.
 
-Access is enforced in the backend because the browser and the model are both outside the trust boundary. The frontend only sends a user ID. The backend turns it into a `Principal` with `allowed_job_ids`, and every query filters by those IDs inside SQL. The principal is never a tool argument, so the model cannot see it or change it, and a prompt such as "pretend I am an admin" has nothing to act on. Hiding a page in the UI is a convenience, not access control: the API returns 404 for pages and records outside the role.
+Access is enforced in the backend because the browser and the model are both outside the trust boundary. The frontend only sends a user ID. The backend turns it into a `Principal` with `allowed_job_ids`, and every query filters by those IDs inside SQL. The principal is never a tool argument, so the model cannot see it or change it, and a prompt such as "pretend I am an admin" has nothing to act on. Hiding a page in the UI is a convenience, not access control: the API returns 404 for pages and records outside the role. For the same reason, `/api/ask` sends the tools called, their inputs, token usage, cost, and the verifier report only to Admin; other roles get the answer, its citations, and its verified label. Saved chats follow the same rule: they are stored under the user ID from `X-Demo-User`, another user's chat ID gets the same 404 as an out-of-scope record, and a non-admin chat never stores the trace.
 
 Out-of-scope requests fail closed. Asking about a job or application outside scope always returns "<ID> is not in your scope", whether or not the ID exists, so nobody can learn what exists outside their scope.
 

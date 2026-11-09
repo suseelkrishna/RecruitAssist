@@ -94,11 +94,13 @@ def test_unanswerable(questions):
 
 def test_every_question_names_a_demo_user_and_known_checks(questions, db):
     users = {r[0] for r in db.execute("SELECT user_id FROM users")}
-    known = {"numbers", "ids", "ids_absent", "top", "order", "tools", "mentions", "forbidden"}
+    known = {"numbers", "ids", "ids_absent", "top", "order", "tools", "mentions", "forbidden",
+             "tool_calls", "tool_order"}
     assert len(questions["questions"]) >= 18
     assert len({q["id"] for q in questions["questions"]}) == len(questions["questions"])
     for q in questions["questions"]:
         assert q["user"] in users
+        assert q["group"] in ("core", "multi_tool")
         assert set(q["checks"]) <= known
 
 
