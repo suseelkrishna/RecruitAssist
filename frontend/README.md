@@ -43,7 +43,7 @@ npm run e2e
 
 | Path | What it shows | API |
 | --- | --- | --- |
-| `/` | How it works, principles, and the demo users to pick from | `GET /api/users` |
+| `/` | The RecruitAssist mark, one line on what it does, and the demo users to pick from. How it works opens in a drawer | `GET /api/users` |
 | `/dashboard` | Filters, headline numbers, and eight charts, each with a table view | `GET /api/dashboard` |
 | `/ask` | Questions to the assistant, with verified, cited answers | `GET /api/me`, `POST /api/ask` |
 | `/jobs` | The jobs in scope, with filters kept in the URL | `GET /api/jobs` |

@@ -12,12 +12,13 @@ All data is synthetic. The company, Northbeam Robotics, is fictional, and so are
 
 ## Try it
 
-1. Open the live demo and pick a demo user: **Admin** (Morgan Lee), **HR Manager** (Priya Raman or Daniel Okafor), or **HR User** (Sam Rivera, Alex Chen, or Jordan Patel).
+1. Open the live demo and pick a demo user from the tiles on the first page: **Admin** (Morgan Lee), **HR Manager** (Priya Raman or Daniel Okafor), or **HR User** (Sam Rivera, Alex Chen, or Jordan Patel).
 2. Go to **Ask** and pick one of the suggested questions for that role:
    - HR User: "What should I do today?", "Top 3 candidates for my role", "Who is waiting on me?"
    - HR Manager: "Where is my team losing candidates?", "Which recruiter is overloaded?", "Which roles are behind target?"
    - Admin: "Company-wide pipeline health", "Which sources bring the best candidates?", "Any integration issues?"
 3. Click any cited ID to see the evidence behind it, then switch users and ask again to see the scope change.
+4. Open a job from **Jobs** to see its funnel and ranked candidates, each scored out of 100. **How it works** in the top bar explains the steps behind every answer.
 
 Switching users is a demo feature, not authentication. There are no passwords.
 
@@ -152,7 +153,7 @@ The server also offers one resource, the scoring rubric at `rubric://scoring/v1`
 
 Every tool is read-only and returns compact JSON with stable IDs such as `JOB-2`, `APP-014`, `SC-031`, `EM-007`, and `TASK-012`. Free text from candidates and interviewers is wrapped as `{"untrusted_text": ...}`, contact details are masked, and results include `warnings` and `missing` fields where they apply. Tools reject unknown arguments and badly formed IDs with an error that lists the valid options.
 
-**Candidate scores.** Each active application gets a score from 0 to 1: 50% from the average scorecard recommendation (strong yes 4, yes 3, no 2, strong no 1), 30% from the interviewers' ratings of each must-have skill, and 20% from the furthest stage reached. Equal scores are ordered by application ID. The CV does not affect the score, because the candidate writes it and it may contain instructions aimed at the AI.
+**Candidate scores.** Each active application gets a score from 0 to 1, which the job page shows out of 100: 50% from the average scorecard recommendation (strong yes 4, yes 3, no 2, strong no 1), 30% from the interviewers' ratings of each must-have skill, and 20% from the furthest stage reached. Equal scores are ordered by application ID. The CV does not affect the score, because the candidate writes it and it may contain instructions aimed at the AI.
 
 **Late work.** `pending_tasks` adds four rules to the open tasks: no scorecard 48 hours after an interview, no reply to a candidate email after 2 business days, more than 7 days in one stage (except Offer), and no response to an offer after 5 days. If an open task already covers the same work, the rule adds its evidence to that task instead of listing it twice.
 
@@ -183,7 +184,7 @@ If a check fails, the model gets one retry with the failures listed. If the retr
 ## How correctness was verified
 
 - **Data invariants:** 20 tests check the generated database itself: stage events are contiguous and ordered, closed applications end with their outcome, scorecards exist only for completed interviews, every timestamp is at or before the as of time, all emails use `example.com`, all phones use `555-01xx`, and regenerating gives the same data hash.
-- **Unit tests:** 306 backend tests. Logic functions are checked against SQL written separately in the tests, an answer key computed by `backend/evals/expected.py`, or small hand-built databases. They cover ties, roles with no candidates, missing scorecards, and values exactly at each threshold. The agent loop is tested with a fake model, and every API route is tested over HTTP. The frontend has 15 component tests and 12 Playwright smoke tests that open every page as each role, ask a question, and reassign a job.
+- **Unit tests:** 309 backend tests. Logic functions are checked against SQL written separately in the tests, an answer key computed by `backend/evals/expected.py`, or small hand-built databases. They cover ties, roles with no candidates, missing scorecards, and values exactly at each threshold. The agent loop is tested with a fake model, and every API route is tested over HTTP. The frontend has 17 component tests and 14 Playwright smoke tests that open every page as each role, ask a question, reassign a job, clear dashboard filters, and open How it works.
 - **Mutation score:** 12 of 12. Twelve deliberate bugs were applied one at a time to scoring weights, recommendation points, tie order, the active-only filter, the four late-work thresholds, the overdue boundary, the SQL scope filter, the HR Manager and HR User scope rules, and the contact-details check. The test suite failed for every one.
 - **RBAC matrix:** every logic function as each of the 6 users, as described under Roles and access.
 - **Evals:** 18 questions, each run 3 times per setting, graded by `backend/evals/grade.py` with its own SQL. Checks cover numbers, IDs, tools used, citation validity, ranking order, scope, contact details, required mentions, and forbidden content.
