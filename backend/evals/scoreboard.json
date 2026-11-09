@@ -1,7 +1,7 @@
 {
- "generated_at": "2026-11-09T17:00:46Z",
+ "generated_at": "2026-11-09T17:48:20Z",
  "as_of": "2026-11-09T17:00:00Z",
- "data_hash": "f72092ed6ba5d71ce3ee5d06d61d50971cd7bd6d6de661be3fe58da76f3fb090",
+ "data_hash": "e6c74753bb7687e6cddd0ebbe626fbfb12bbf44140d6c03cdd88349eafc6e249",
  "questions": 18,
  "repeats": 3,
  "grading": "Pass or fail comes from deterministic checks (evals/grade.py). llm_judge scores, where present, come from an LLM judge (evals/judge_rubric.md).",
@@ -23,9 +23,9 @@
    "runs": 54,
    "questions": 18,
    "repeats": 3,
-   "passed": 51,
-   "pass_rate_pct": 94.4,
-   "verified_pass_rate_pct": 88.9,
+   "passed": 54,
+   "pass_rate_pct": 100.0,
+   "verified_pass_rate_pct": 96.3,
    "check_pass_rate_pct": {
     "numbers": 100.0,
     "ids": 100.0,
@@ -34,32 +34,28 @@
     "ranking": 100.0,
     "scope": 100.0,
     "pii": 100.0,
-    "mentions": 90.0,
+    "mentions": 100.0,
     "forbidden": 100.0
    },
    "citation_validity_pct": 100.0,
-   "verifier_failures": 3,
+   "verifier_failures": 2,
    "verifier_retries": 10,
    "errors": 0,
    "consistency_pct": 100.0,
-   "latency_p50_s": 6.0,
-   "latency_p95_s": 16.9,
+   "latency_p50_s": 5.9,
+   "latency_p95_s": 14.5,
    "tokens_per_question": {
     "input_tokens": 6,
-    "output_tokens": 1501,
-    "cache_creation_input_tokens": 4944,
-    "cache_read_input_tokens": 9324
+    "output_tokens": 1443,
+    "cache_creation_input_tokens": 4462,
+    "cache_read_input_tokens": 9873
    },
    "api_calls_per_question": 2.0,
-   "cache_hit_rate_pct": 94.4,
-   "cache_read_share_pct": 65.3,
-   "cost_per_question_usd": 0.0015,
-   "total_cost_usd": 0.079,
-   "llm_judge": {
-    "judged": 18,
-    "faithfulness": 3.94,
-    "clarity": 3.78
-   },
+   "cache_hit_rate_pct": 94.3,
+   "cache_read_share_pct": 68.8,
+   "cost_per_question_usd": 0.0014,
+   "total_cost_usd": 0.0744,
+   "llm_judge": null,
    "per_question": {
     "ambiguous-engineer": {
      "passed": 3,
@@ -90,7 +86,7 @@
      "runs": 3
     },
     "people-overdue": {
-     "passed": 0,
+     "passed": 3,
      "runs": 3
     },
     "process-top3": {
@@ -1469,5 +1465,5 @@
   "gpt-6.1-sol",
   "gpt-6.1-terra"
  ],
- "total_cost_usd": 9.3371
+ "total_cost_usd": 9.3325
 }
