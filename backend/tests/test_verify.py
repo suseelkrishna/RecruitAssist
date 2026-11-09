@@ -120,3 +120,46 @@ def test_masked_contact_passes():
 def test_numbers_from_the_question_are_allowed():
     report = verify("Here are the top 3 [APP-068].", [RANKED], question="Who are the top 3 candidates?")
     assert report["checks"]["numbers"]["passed"]
+
+
+JOBS = {
+    "name": "list_jobs",
+    "input": {},
+    "is_error": False,
+    "output": {"count": 4, "jobs": [{"job_id": "JOB-1", "active_applications": 15},
+                                    {"job_id": "JOB-2", "active_applications": 18},
+                                    {"job_id": "JOB-4", "active_applications": 0},
+                                    {"job_id": "JOB-5", "active_applications": 0}]},
+}
+
+
+def test_total_stated_first_and_worked_out_later_passes():
+    answer = ("You have 33 active candidates in your pipeline.\n\n"
+              "| Job | Active |\n|---|---|\n| JOB-1 | 15 |\n| JOB-2 | 18 |\n\n"
+              "Total: 15 + 18 + 0 + 0 = 33.")
+    assert verify(answer, [JOBS])["passed"]
+
+
+def test_total_never_worked_out_fails():
+    report = verify("You have 33 active candidates. JOB-1 has 15 and JOB-2 has 18.", [JOBS])
+    assert not report["passed"] and report["checks"]["numbers"]["unsupported"] == ["33"]
+
+
+def test_wrong_total_repeated_elsewhere_fails():
+    answer = "You have 34 active candidates.\n\nTotal: 15 + 18 = 34."
+    report = verify(answer, [JOBS])
+    assert not report["passed"] and report["checks"]["numbers"]["unsupported"] == ["34"]
+
+
+def test_total_returned_by_the_tool_passes_without_working():
+    jobs = {**JOBS, "output": {**JOBS["output"], "active_applications_total": 33}}
+    assert verify("You have 33 active candidates: 15 on JOB-1 and 18 on JOB-2.", [jobs])["passed"]
+
+
+def test_degraded_source_warning_in_the_answer_passes():
+    tasks = {**TASKS, "output": {**TASKS["output"], "degraded_sources": [
+        {"integration": "Interview notes", "status": "Degraded", "affects": "scorecards"}],
+        "warnings": ["The Interview notes integration is degraded, so some scorecards may be missing or out of date."]}}
+    answer = ("4 tasks are overdue, led by [TASK-011] at 3.8 days. The Interview notes integration is degraded, "
+              "so some scorecards may be missing.")
+    assert verify(answer, [tasks])["passed"]

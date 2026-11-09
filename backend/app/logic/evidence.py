@@ -16,6 +16,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from app import db
 from app.access import Principal
 from app.logic.common import require_application, resolve_as_of
+from app.logic.sources import degraded_sources
 
 SECTIONS = ["cv", "scorecards", "emails", "history"]
 TEXT_LIMITS = {"cv": 1500, "notes": 600, "body": 1000}
@@ -80,6 +81,10 @@ def get_candidate_evidence(principal: Principal, application_id: str, sections: 
         result["emails"] = emails(params)
     if "history" in sections:
         result["history"] = history(app, params)
+    fed_by = {"scorecards": "scorecards", "emails": "candidate emails", "history": "applications and stages"}
+    degraded = degraded_sources({fed_by[s] for s in sections if s in fed_by}, as_of)
+    result["degraded_sources"] = degraded
+    result["warnings"] = [d["warning"] for d in degraded]
     return result
 
 
