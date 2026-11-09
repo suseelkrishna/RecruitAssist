@@ -15,7 +15,11 @@ from typing import Any
 
 from app import llm
 
-CHECKS = ["numbers", "ids", "tools", "citations", "ranking", "scope", "pii", "mentions", "forbidden"]
+CHECKS = ["numbers", "ids", "tools", "citations", "ranking", "scope", "pii", "mentions", "forbidden",
+          "tool_calls", "tool_order"]
+# results.md keeps the multi-tool section between these markers, so a core run does not erase it.
+GROUP_START = "<!-- multi_tool:start -->"
+GROUP_END = "<!-- multi_tool:end -->"
 # A setting within this many points of the best verified pass rate counts as tied; the cheapest tied one wins.
 PASS_RATE_TIE_POINTS = 5.0
 
@@ -254,10 +258,63 @@ def results_markdown(board: dict[str, Any], questions: list[dict[str, Any]],
     return "\n".join(lines) + "\n"
 
 
+def group_section(text: str) -> str:
+    """The marked multi-tool section of an existing results.md, or an empty string."""
+    if GROUP_START in text and GROUP_END in text:
+        return text[text.index(GROUP_START):text.index(GROUP_END) + len(GROUP_END)] + "\n"
+    return ""
+
+
+def with_group_section(text: str, section: str) -> str:
+    """results.md text with the marked multi-tool section replaced, or added at the end."""
+    old = group_section(text)
+    if old:
+        return text.replace(old, section)
+    return text.rstrip("\n") + "\n\n" + section if section else text
+
+
 def write_reports(board: dict[str, Any], questions: list[dict[str, Any]], runs: list[dict[str, Any]],
                   scoreboard_path: Path, results_path: Path) -> None:
-    """Write scoreboard.json and results.md."""
+    """Write scoreboard.json and results.md, keeping any multi-tool section already in results.md."""
     failures = [{"question_id": r["question_id"], "reasons": r["grade"]["reasons"]}
                 for r in runs if not r["grade"]["passed"]]
+    kept = group_section(results_path.read_text()) if results_path.exists() else ""
     scoreboard_path.write_text(json.dumps(board, indent=1) + "\n")
-    results_path.write_text(results_markdown(board, questions, failures))
+    results_path.write_text(with_group_section(results_markdown(board, questions, failures), kept))
+
+
+def group_summary(runs: list[dict[str, Any]], meta: dict[str, Any]) -> dict[str, Any]:
+    """The summary of one question group's runs (one model and effort): rates, tool calls,
+    cost, latency, and each question's result."""
+    row = summarize(runs)
+    return {**meta, "model": runs[0]["model"], "effort": runs[0]["effort"],
+            "runs": row["runs"], "passed": row["passed"], "pass_rate_pct": row["pass_rate_pct"],
+            "verified_rate_pct": rounded(100 * mean([bool(r["result"].get("verified")) for r in runs]), 1),
+            "verified_pass_rate_pct": row["verified_pass_rate_pct"],
+            "tool_calls_per_question": rounded(mean([len(r["result"].get("steps", [])) for r in runs]), 1),
+            "cost_per_question_usd": row["cost_per_question_usd"], "total_cost_usd": row["total_cost_usd"],
+            "latency_p50_s": row["latency_p50_s"],
+            "questions": [{"id": r["question_id"], "user": r["user"], "passed": r["grade"]["passed"],
+                           "verified": bool(r["result"].get("verified")),
+                           "tools": [s["tool"] for s in r["result"].get("steps", [])],
+                           "reasons": r["grade"]["reasons"]} for r in sorted(runs, key=lambda r: r["question_id"])]}
+
+
+def group_markdown(summary: dict[str, Any]) -> str:
+    """The marked results.md section for the multi-tool group."""
+    lines = [GROUP_START, "## Multi-tool questions", "",
+             f"{len(summary['questions'])} questions that each need two or three tools (follow-ups, a question "
+             f"that is half out of scope, and combined questions), run once with {summary['model']} at "
+             f"{summary['effort']} effort on {summary['generated_at'][:10]}. They are a separate group "
+             "(`--group multi_tool`) and do not count toward the scoreboard above.", "",
+             "| Passed | Verified | Tool calls per question | Cost per question | Total cost | p50 latency |",
+             "|---|---|---|---|---|---|",
+             f"| {summary['passed']} of {summary['runs']} ({fmt(summary['pass_rate_pct'], '%')}) "
+             f"| {fmt(summary['verified_rate_pct'], '%')} | {fmt(summary['tool_calls_per_question'])} "
+             f"| ${summary['cost_per_question_usd']:.4f} | ${summary['total_cost_usd']:.4f} "
+             f"| {fmt(summary['latency_p50_s'], ' s')} |", "",
+             "| Question | User | Result | Tools called | Why it failed |", "|---|---|---|---|---|"]
+    for q in summary["questions"]:
+        lines.append(f"| {q['id']} | {q['user']} | {'pass' if q['passed'] else 'fail'} "
+                     f"| {', '.join(q['tools']) or 'none'} | {'; '.join(q['reasons']).replace('|', '/') or ''} |")
+    return "\n".join(lines + [GROUP_END]) + "\n"

@@ -121,3 +121,28 @@ The most common reasons a run failed, per question, across all settings.
 - rbac-named-candidate: mentions: no match for scope|access|not able|unable|can't|cannot|don't have|do not have|only see (2 runs)
 - ambiguous-engineer: mentions: no match for Manufacturing Process Engineer, Robotics Software Engineer (1 runs)
 - rbac-everything: status: round_limit (1 runs)
+
+<!-- multi_tool:start -->
+## Multi-tool questions
+
+12 questions that each need two or three tools (follow-ups, a question that is half out of scope, and combined questions), run once with claude-haiku-5-5 at low effort on 2026-11-09. They are a separate group (`--group multi_tool`) and do not count toward the scoreboard above.
+
+| Passed | Verified | Tool calls per question | Cost per question | Total cost | p50 latency |
+|---|---|---|---|---|---|
+| 12 of 12 (100.0%) | 100.0% | 3.6 | $0.0025 | $0.0296 | 8.5 s |
+
+| Question | User | Result | Tools called | Why it failed |
+|---|---|---|---|---|
+| mt-behind-leak-top3 | USR-1 | pass | list_jobs, pipeline_by_job, integration_health, funnel_dropoff, score_candidates, pending_tasks |  |
+| mt-compare-tops | USR-2 | pass | score_candidates, score_candidates, integration_health |  |
+| mt-followup-fourth | USR-1 | pass | score_candidates, integration_health |  |
+| mt-followup-other-job | USR-1 | pass | score_candidates |  |
+| mt-integration-impact | USR-1 | pass | integration_health, pending_tasks |  |
+| mt-mixed-scope | USR-4 | pass | funnel_dropoff, pipeline_by_job, pending_tasks, integration_health |  |
+| mt-offers-days-open | USR-1 | pass | pending_tasks, pipeline_by_job, score_candidates, get_candidate_evidence, get_candidate_evidence |  |
+| mt-overdue-integration | USR-1 | pass | pending_tasks, integration_health, get_candidate_evidence, get_candidate_evidence |  |
+| mt-overloaded-recruiter-leak | USR-2 | pass | recruiter_load, list_jobs, funnel_dropoff |  |
+| mt-source-in-top3 | USR-1 | pass | source_quality, score_candidates, get_candidate_evidence, get_candidate_evidence, get_candidate_evidence |  |
+| mt-stuck-candidates | USR-4 | pass | pending_tasks |  |
+| mt-withdrawals-by-source | USR-1 | pass | funnel_dropoff, get_candidate_evidence, get_candidate_evidence, get_candidate_evidence, get_candidate_evidence, get_candidate_evidence, get_candidate_evidence |  |
+<!-- multi_tool:end -->

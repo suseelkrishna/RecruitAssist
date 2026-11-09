@@ -18,6 +18,12 @@ Usage (from backend/):
                                                                             with an API error
     uv run python evals/run.py --record --models claude-sonnet-5-5 --efforts medium
                                                             record the suggested questions into data/recordings.json
+    uv run python evals/run.py --group multi_tool --models claude-haiku-5-5 --efforts low --repeats 1
+                                                            the multi-tool questions; writes evals/multi_tool.json
+                                                            and its section of results.md, not the scoreboard
+
+Each question has a group. The default group, core, is the one the scoreboard and the
+model choice are built from; other groups are reported separately.
 """
 
 from __future__ import annotations
@@ -45,6 +51,8 @@ from evals import expected, grade, judge, report  # noqa: E402
 QUESTIONS = BACKEND / "evals" / "questions.json"
 SCOREBOARD = BACKEND / "evals" / "scoreboard.json"
 RESULTS = BACKEND / "evals" / "results.md"
+GROUP_SUMMARY = BACKEND / "evals" / "{group}.json"
+DEFAULT_GROUP = "core"
 OUT_DIR = BACKEND / "evals_out"
 MODELS = llm.eval_models()
 EFFORTS = ["low", "medium"]
@@ -64,9 +72,13 @@ CHIPS = {
 RECORD_ATTEMPTS = 3
 
 
-def load_questions(only: list[str] | None = None) -> dict[str, Any]:
-    """questions.json, limited to the given question IDs when any are named."""
+def load_questions(only: list[str] | None = None, group: str = DEFAULT_GROUP) -> dict[str, Any]:
+    """questions.json, limited to one group and, when any are named, to the given question IDs."""
     data = json.loads(QUESTIONS.read_text())
+    groups = {q.get("group", DEFAULT_GROUP) for q in data["questions"]}
+    if group not in groups:
+        raise SystemExit(f"Unknown group {group!r}. Groups: {', '.join(sorted(groups))}")
+    data["questions"] = [q for q in data["questions"] if q.get("group", DEFAULT_GROUP) == group]
     if only:
         unknown = set(only) - {q["id"] for q in data["questions"]}
         if unknown:
@@ -195,6 +207,21 @@ def write_outputs(runs: list[dict[str, Any]], data: dict[str, Any]) -> dict[str,
     return board
 
 
+def write_group_outputs(runs: list[dict[str, Any]], data: dict[str, Any], group: str) -> dict[str, Any]:
+    """Write a non-core group's summary to evals/<group>.json and its section of results.md.
+    The scoreboard and the rest of results.md are left as they are."""
+    meta = {"group": group, "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "as_of": data["as_of"], "data_hash": data["data_hash"]}
+    summary = report.group_summary(runs, meta)
+    path = Path(str(GROUP_SUMMARY).format(group=group))
+    path.write_text(json.dumps(summary, indent=1) + "\n")
+    RESULTS.write_text(report.with_group_section(RESULTS.read_text() if RESULTS.exists() else "",
+                                                 report.group_markdown(summary)))
+    print(f"Wrote {path.relative_to(BACKEND)} and the {group} section of {RESULTS.relative_to(BACKEND)}. "
+          f"Passed {summary['passed']} of {summary['runs']}, ${summary['total_cost_usd']:.4f}.")
+    return summary
+
+
 def regrade(path: Path, data: dict[str, Any]) -> list[dict[str, Any]]:
     """Graded runs read back from a runs.jsonl file, regraded with the current checks."""
     by_id = {q["id"]: q for q in data["questions"]}
@@ -267,7 +294,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--models", nargs="+", default=MODELS)
     parser.add_argument("--efforts", nargs="+", default=EFFORTS)
     parser.add_argument("--repeats", type=int, default=REPEATS)
-    parser.add_argument("--questions", nargs="+", help="Question IDs to run. Default: all.")
+    parser.add_argument("--questions", nargs="+", help="Question IDs to run. Default: all in the group.")
+    parser.add_argument("--group", default=DEFAULT_GROUP,
+                        help="Question group to run. Default: core, the group behind the scoreboard.")
     parser.add_argument("--concurrency", type=int, default=CONCURRENCY)
     parser.add_argument("--budget", type=float, default=BUDGET_USD, help="Stop starting runs past this spend.")
     parser.add_argument("--judge", metavar="MODEL", help="Add LLM judge scores using this model.")
@@ -285,10 +314,15 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("Set these keys in backend/.env first: " + ", ".join(missing))
     # The evals score the seed data, so job assignments must not come from a shared Redis store.
     os.environ.pop("UPSTASH_REDIS_REST_URL", None)
-    data = load_questions(args.questions)
+    data = load_questions(args.questions, args.group)
+    grouped = args.group != DEFAULT_GROUP
+    if grouped and (len(args.models) != 1 or len(args.efforts) != 1):
+        raise SystemExit("A group other than core runs one model at one effort: pass one --models and one --efforts.")
+    finish = (lambda runs: write_group_outputs(runs, data, args.group)) if grouped else \
+        (lambda runs: write_outputs(runs, data))
 
     if args.from_runs:
-        write_outputs(regrade(args.from_runs, data), data)
+        finish(regrade(args.from_runs, data))
         return 0
     if args.record:
         asyncio.run(record(args.models[0], args.efforts[0]))
@@ -309,13 +343,13 @@ def main(argv: list[str] | None = None) -> int:
         sample = [q for q in data["questions"] if q["id"] == ESTIMATE_QUESTION] or data["questions"][:1]
         runs = asyncio.run(run_matrix(sample, args.models, args.efforts, 1, args.concurrency, args.budget,
                                       None, 0, out_file))
-        projected = estimate(runs, len(load_questions(None)["questions"]), args.repeats, args.judge)
+        projected = estimate(runs, len(load_questions(None, args.group)["questions"]), args.repeats, args.judge)
         return 0 if projected is not None else 1
     runs = asyncio.run(run_matrix(data["questions"], args.models, args.efforts, args.repeats,
                                   args.concurrency, args.budget, args.judge, args.judge_repeats, out_file, done))
     print(f"Raw runs: {out_file.relative_to(BACKEND)}")
     if runs:
-        write_outputs(runs, data)
+        finish(runs)
     return 0
 
 
