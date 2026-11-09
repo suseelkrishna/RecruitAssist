@@ -1,0 +1,13 @@
+# Files the Vercel CLI never uploads. Secrets stay on this machine; each Vercel
+# project sets its own environment variables instead.
+**/.env
+**/.env.*
+**/.venv/
+**/node_modules/
+**/.next/
+**/__pycache__/
+**/.pytest_cache/
+backend/evals_out/
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
