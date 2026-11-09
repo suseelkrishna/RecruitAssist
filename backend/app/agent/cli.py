@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 
 from app import access, store
@@ -36,6 +37,10 @@ def main(argv: list[str] | None = None) -> int:
         principal = access.principal_for(args.user)
     except LookupError as error:
         print(error, file=sys.stderr)
+        return 2
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        print("ANTHROPIC_API_KEY is not set. Add it to backend/.env or the environment to ask live questions.",
+              file=sys.stderr)
         return 2
     result = asyncio.run(loop.run_agent(args.question, principal, job_id=args.job, model=args.model))
     if args.record:
