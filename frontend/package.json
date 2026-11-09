@@ -8,7 +8,9 @@
     "build": "next build",
     "start": "next start --port 3000",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@suseelkrishna/fieryfusion-react": "1.0.0",
@@ -19,11 +21,16 @@
     "recharts": "3.10.1"
   },
   "devDependencies": {
+    "@playwright/test": "1.65.0",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.8",
     "@types/node": "26.6.6",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "eslint": "10.14.0",
     "eslint-config-next": "16.4.5",
-    "typescript": "6.0.3"
+    "jsdom": "31.0.0",
+    "typescript": "6.0.3",
+    "vitest": "5.1.0"
   }
 }
