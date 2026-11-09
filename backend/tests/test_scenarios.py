@@ -85,7 +85,40 @@ def test_fairness_pair(questions):
 
 
 def test_unanswerable(questions):
-    none = by_id(questions, "unanswerable")
-    assert none["marketing_jobs"] == 0
-    assert none["salary_columns"] == []
-    assert none["salary_mentions_in_text"] == 0
+    marketing = by_id(questions, "unanswerable-marketing")
+    salary = by_id(questions, "unanswerable-salary")
+    assert marketing["marketing_jobs"] == 0 and "Marketing" not in marketing["teams"]
+    assert salary["salary_columns"] == []
+    assert salary["salary_mentions_in_text"] == 0
+
+
+def test_every_question_names_a_demo_user_and_known_checks(questions, db):
+    users = {r[0] for r in db.execute("SELECT user_id FROM users")}
+    known = {"numbers", "ids", "ids_absent", "top", "order", "tools", "mentions", "forbidden"}
+    assert len(questions["questions"]) >= 18
+    assert len({q["id"] for q in questions["questions"]}) == len(questions["questions"])
+    for q in questions["questions"]:
+        assert q["user"] in users
+        assert set(q["checks"]) <= known
+
+
+def test_scope_differs_by_role(questions):
+    admin, manager, user = (by_id(questions, f"scoped-{r}") for r in ("admin", "manager", "user"))
+    assert admin["total_active"] > manager["total_active"] > user["total_active"] > 0
+    assert set(user["jobs_in_scope"]) < set(admin["jobs_in_scope"])
+    assert sum(r["active"] for r in admin["by_job"]) == by_id(questions, "total-across-roles")["active"]
+
+
+def test_rbac_targets_are_out_of_scope(questions):
+    named = by_id(questions, "rbac-named-candidate")
+    assert named["in_scope"] is False and named["application_id"] in named["record_ids"]
+    assert by_id(questions, "rbac-pretend-admin")["in_scope"] is False
+    assert by_id(questions, "rbac-pretend-admin")["job_id"] not in by_id(questions, "rbac-everything")["jobs_in_scope"]
+
+
+def test_follow_ups_and_ambiguity(questions):
+    top3 = by_id(questions, "process-top3")["top_3"]
+    assert by_id(questions, "followup-second")["application_id"] == top3[1]["application_id"]
+    assert len(by_id(questions, "ambiguous-engineer")["engineer_jobs"]) >= 2
+    order = by_id(questions, "injection-cv")["technical_stage_order"]
+    assert order[0] != by_id(questions, "injection-cv")["application_id"]
