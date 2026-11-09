@@ -19,7 +19,7 @@ from app.access import Principal, current_recruiters
 from app.logic.common import NotAllowedError, require_job
 from app.logic.funnel import stage_counts, stage_events
 from app.logic.scope import list_jobs
-from app.logic.scoring import MAX_TOP_N, score_candidates
+from app.logic.scoring import MAX_TOP_N, WEIGHTS, score_candidates
 from app.logic.tasks import pending_tasks
 
 REASON_MAX = 300
@@ -58,13 +58,27 @@ def job_detail(principal: Principal, job_id: str, as_of: str | None = None) -> d
         "can_reassign": allowed,
         "reassign_options": options,
         "funnel": stage_counts(stage_events(principal, [job_id], ranked["as_of"])),
-        "candidates": [{k: c[k] for k in ("rank", "application_id", "full_name", "current_stage", "score",
-                                          "incomplete_evidence")} for c in ranked["ranked"]],
+        "candidates": [{**{k: c[k] for k in ("rank", "application_id", "full_name", "current_stage", "score",
+                                             "incomplete_evidence")}, "score_100": score_100(c["score"])}
+                       for c in ranked["ranked"]],
         "candidate_pool": ranked["pool_size"],
-        "top_3": ranked["ranked"][:3],
+        "top_3": [with_points(c) for c in ranked["ranked"][:3]],
         "rubric_weights": ranked["weights"],
         "tasks": pending_tasks(principal, job_id=job_id, as_of=as_of)["tasks"],
     }
+
+
+def score_100(score: float) -> int:
+    """A 0 to 1 score as a whole number out of 100, for people to read."""
+    return round(score * 100)
+
+
+def with_points(candidate: dict[str, Any]) -> dict[str, Any]:
+    """A ranked candidate with its score out of 100 and each component's points out of its
+    weight in points, for example scorecards 50 of 50. The rubric's own values stay as they are."""
+    components = {name: {**part, "points": round(part["weighted"] * 100, 1), "max_points": round(WEIGHTS[name] * 100)}
+                  for name, part in candidate["components"].items()}
+    return {**candidate, "score_100": score_100(candidate["score"]), "components": components}
 
 
 def reassign(principal: Principal, job_id: str, recruiter_user_id: str,

@@ -210,3 +210,31 @@ def test_change_log_names_who_and_what(client):
     assert entry["user_name"] == "Priya Raman" and entry["user_role"] == "hr_manager"
     assert entry["summary"] == "JOB-2 recruiter: Alex Chen to Sam Rivera"
     assert entry["reason"] == "Balancing load"
+
+
+# Plain numbers and words for people
+
+def test_job_detail_scores_out_of_100_with_points_per_component(client):
+    body = client.get("/api/jobs/JOB-2", headers=as_user("USR-1")).json()
+    for c in body["candidates"]:
+        assert c["score_100"] == round(c["score"] * 100)
+    top = body["top_3"][0]
+    # Hollis Bellweather: scorecards 1.0, must-have 0.963, stage 0.6 -> 50 + 28.9 + 12 points.
+    assert {k: (v["points"], v["max_points"]) for k, v in top["components"].items()} == {
+        "scorecards": (50.0, 50), "must_have": (28.9, 30), "stage": (12.0, 20)}
+    assert top["score_100"] == 91
+
+
+def test_busiest_week_is_written_as_a_readable_date(client):
+    takeaway = client.get("/api/dashboard", headers=as_user("USR-1")).json()["applicants_total"]["takeaway"]
+    assert "started Nov 2, 2026 with" in takeaway and "2026-11-02" not in takeaway
+
+
+def test_offer_outcomes_come_with_candidate_names(client, db):
+    offers = client.get("/api/dashboard", headers=as_user("USR-1")).json()["offer_acceptance"]
+    ids = offers["accepted"] + offers["declined"] + offers["withdrawn"] + offers["pending"]
+    assert ids and set(offers["names"]) == set(ids)
+    for app_id, name in offers["names"].items():
+        expected = db.execute("SELECT c.full_name FROM applications a JOIN candidates c "
+                              "ON c.candidate_id = a.candidate_id WHERE a.application_id = ?", (app_id,)).fetchone()[0]
+        assert name == expected
