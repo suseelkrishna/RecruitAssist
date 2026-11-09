@@ -4,7 +4,7 @@ RecruitAssist answers a recruiter's questions about a hiring pipeline, such as "
 
 **Live site:** https://recruitassist.vercel.app
 
-![The Ask page: an HR User asks for the top 3 candidates and gets a live, verified, cited ranking that also warns about the degraded Interview notes integration](docs/screenshot-ask.png)
+![The Ask page: an Admin asks for the top 3 candidates for a role and gets a verified, cited ranking that also warns about the degraded Interview notes integration, with saved chats beside it](docs/screenshot-ask.png)
 
 All data is synthetic. The company, Northbeam Robotics, is fictional, and so are its people, schools, and employers.
 
@@ -33,6 +33,7 @@ All data is synthetic. The company, Northbeam Robotics, is fictional, and so are
 - An agent loop with prompt caching, a grounding contract, and a deterministic verifier with one retry.
 - A FastAPI backend and a Next.js web UI on my brand kit: catch-up page, dashboard, Ask, jobs, tasks, sources, change log, and quality pages.
 - One write, recruiter reassignment, with a confirmation step and an append-only change log.
+- Ask as a chat with follow-up questions. Chats are saved on the server per demo user for 30 days (the last 50, up to 30 questions each) and survive restarts only when Upstash Redis is configured.
 - 18 eval questions graded by code, run across Claude and OpenAI models, with a written rule for choosing the default.
 - Deployment as two Vercel projects with per-IP rate limits, a daily cap, and recorded answers as a fallback.
 
@@ -59,7 +60,7 @@ flowchart LR
 The application is the unit, so one person can be at different stages for two roles.
 Each open job carries a test scenario: a pipeline leak, ranking traps, and overdue work.
 
-**Roles and access:** Admin sees all jobs, an HR Manager sees their teams' jobs, and an HR User sees the jobs they recruit for.
+**Roles and access:** Admin sees all jobs, an HR Manager sees their teams' jobs, and an HR User sees the jobs they recruit for. The Quality page and the trace under each answer (Show trace) are for Admin only.
 The backend turns the demo user ID into a `Principal`, and every query filters by its allowed jobs inside SQL.
 Out-of-scope requests fail closed with the same "not in your scope" message whether or not the record exists.
 
@@ -89,10 +90,11 @@ The verifier then checks every answer without AI:
 If a check fails, the model gets one retry; if that also fails, the answer is labeled "Unverified".
 
 Results:
-- **Tests:** 342 backend tests (including 20 data invariant tests), 23 frontend component tests, and 22 Playwright smoke tests.
+- **Tests:** 402 backend tests (including 20 data invariant tests), 47 frontend component tests, and 27 Playwright smoke tests.
 - **Mutation check:** 12 of 12 planted bugs caught, across scoring, task rules, access, and the verifier.
 - **RBAC matrix:** every logic function run as each of the 6 users, against scope computed with separate SQL.
 - **Evals:** 18 questions, 3 repeats each, graded by code; the default setting passed 54 of 54 runs, 96.3% verified.
+- **Multi-tool evals:** 12 more questions that need two or three tools, including follow-ups and a half out-of-scope question; Haiku 5.5 at low effort passed 12 of 12, all verified, with 3.6 tool calls per question for $0.03 in total.
 
 ## Model choice
 

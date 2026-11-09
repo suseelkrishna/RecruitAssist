@@ -60,7 +60,7 @@ claude mcp add recruitassist --scope user -- "$PWD/backend/.venv/bin/python" "$P
 | `OPENAI_API_KEY` | Backend, evals only | Lets `evals/run.py` run OpenAI models; the app ignores it |
 | `ALLOW_OPENAI_LIVE` | Backend | Leave unset. `1` lets the app answer with an OpenAI model |
 | `DAILY_LIVE_CAP` | Backend | Live answers per day across all users, default 150 |
-| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Backend | Keep the change log, reassignments, and rate limits in Upstash Redis |
+| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Backend | Keep the change log, reassignments, rate limits, and saved chats in Upstash Redis. `KV_REST_API_URL` and `KV_REST_API_TOKEN`, the names the Vercel integration creates, work too |
 | `BACKEND_URL` | Frontend | Where `/api/*` is forwarded, default `http://localhost:8000` |
 | `NPM_TOKEN` | Frontend install | Reads the private brand kit |
 
@@ -70,12 +70,13 @@ The app is hosted as two Vercel projects on the Hobby plan, both connected to th
 
 | Project | Root Directory | Preset | Environment variables |
 |---|---|---|---|
-| `recruitassist-api` | `backend/` | FastAPI | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `DAILY_LIVE_CAP`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` |
+| `recruitassist-api` | `backend/` | FastAPI | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `DAILY_LIVE_CAP`, `KV_REST_API_URL`, `KV_REST_API_TOKEN` (or the `UPSTASH_REDIS_REST_` names) |
 | `recruitassist` | `frontend/` | Next.js | `BACKEND_URL`, `NPM_TOKEN` |
 
 - **Backend.** Vercel runs the FastAPI app from `app/main.py` on Python 3.12 (`backend/.python-version`) and installs the pinned dependencies. `pyproject.toml` names the entrypoint explicitly. `backend/vercel.json` adds the database, the recorded answers, the eval and quality JSON files, and the test files (the quality page counts them) to the function bundle.
 - **Answer time.** One answer can take up to 6 model rounds, so `vercel.json` sets the function's maximum duration to 300 seconds. That is the current Hobby limit with Fluid compute; Pro allows up to 800 seconds.
-- **Redis.** Upstash Redis, added from the Vercel Marketplace on its free tier, holds the change log, reassignments, and rate limits. Without it the store lives in memory and resets whenever the function restarts.
+- **Redis.** Upstash Redis, added from the Vercel Marketplace on its free tier, holds the change log, reassignments, rate limits, and saved Ask chats. Connecting it to `recruitassist-api` adds the `KV_REST_API_URL` and `KV_REST_API_TOKEN` variables, which the backend reads through the Upstash REST API. Without it the store lives in memory and resets whenever the function restarts.
+- **Saved chats.** Each demo user's Ask chats are kept for 30 days after their last change, at most 50 per user (the oldest is dropped) and 30 questions per chat. Emails and phone numbers are masked before a chat is saved, and only Admin chats keep the trace. With the in-memory store they reset when the function restarts, and the Admin's chat list says so.
 - **Frontend.** `next.config.ts` forwards `/api/:path*` to `${BACKEND_URL}/api/:path*`. The browser only talks to the frontend's domain, so the backend needs no CORS setup. `NPM_TOKEN` must be available at build time. Use a classic GitHub token with only the `read:packages` scope; `frontend/.npmrc` reads it to install the brand kit.
 - **Secrets.** Only the backend sees `ANTHROPIC_API_KEY` and the Redis token. No `NEXT_PUBLIC_*` variable is secret, and the root `.vercelignore` keeps local `.env` files out of CLI uploads.
 - **Spending.** Set a monthly spend limit for the API key's workspace in the Anthropic Console. The rate limits bound normal use, and the spend limit is the backstop if they are misconfigured.
