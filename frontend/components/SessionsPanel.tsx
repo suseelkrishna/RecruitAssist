@@ -1,15 +1,18 @@
 "use client";
 
 /**
- * The saved chats beside the Ask conversation: a New chat button and the chats newest first,
- * each with its title, when it was last updated, and a menu with Rename and Delete. The open
- * chat is marked with aria-current. Delete asks for confirmation first. For admin, when chats
- * are kept in server memory, one line says they reset when the server restarts.
+ * The saved chats beside the Ask conversation: newest first by default, with a switch to
+ * show the oldest first, and eight chats a page. Each chat has its title, when it was last
+ * updated, and a menu with Rename and Delete. The open chat is marked with aria-current.
+ * Delete asks for confirmation first. For admin, when chats are kept in server memory, one
+ * line says they reset when the server restarts. New chat lives in the Ask page header, so
+ * it stays in reach when this panel is hidden.
  */
 
-import { Button, DropdownMenu, Input } from "@suseelkrishna/fieryfusion-react";
+import { Button, DropdownMenu, Input, SegmentedControl } from "@suseelkrishna/fieryfusion-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { HeadingWithInfo } from "@/components/HeadingWithInfo";
+import { PageControls, usePaged } from "@/components/Paged";
 import { formatDateTime } from "@/lib/format";
 import type { Conversation, Role } from "@/lib/types";
 
@@ -106,16 +109,26 @@ function ChatItem({ chat, current, onOpen, onRename, onDelete }: {
   );
 }
 
-export function SessionsPanel({ conversations, currentId, role, storage, onNew, onOpen, onRename, onDelete }: {
+/** Chats shown on one page of the panel. */
+export const CHATS_PER_PAGE = 8;
+
+const ORDERS = ["Newest", "Oldest"] as const;
+type Order = (typeof ORDERS)[number];
+
+/** The panel. `conversations` arrives newest first from the API; "Oldest" only reverses it. */
+export function SessionsPanel({ conversations, currentId, role, storage, onOpen, onRename, onDelete }: {
   conversations: Conversation[];
   currentId: string | null;
   role: Role;
   storage?: "memory" | "redis";
-  onNew: () => void;
   onOpen: (id: string) => void;
   onRename: (id: string, title: string) => Promise<void>;
   onDelete: (id: string) => void;
 }) {
+  const [order, setOrder] = useState<Order>("Newest");
+  const sorted = order === "Newest" ? conversations : [...conversations].reverse();
+  const paged = usePaged(sorted, CHATS_PER_PAGE, order);
+
   return (
     <nav className="sessions" aria-label="Saved chats">
       <HeadingWithInfo
@@ -124,17 +137,17 @@ export function SessionsPanel({ conversations, currentId, role, storage, onNew, 
         title="Saved chats"
         info="Your chats are saved for 30 days after their last question. The newest 50 are kept, with up to 30 questions each."
       />
-      <Button variant="secondary" onClick={onNew}>
-        New chat
-      </Button>
+      {conversations.length > 1 && (
+        <SegmentedControl label="Sort chats" options={[...ORDERS]} value={order} onChange={(v) => setOrder(v as Order)} />
+      )}
       {role === "admin" && storage === "memory" && (
         <p className="muted session-note">Saved chats are kept in server memory and reset when the server restarts.</p>
       )}
       {conversations.length === 0 ? (
-        <p className="muted session-note">No saved chats yet.</p>
+        <p className="muted session-note">No saved chats yet. Your first question starts one.</p>
       ) : (
         <ul className="list-plain session-list">
-          {conversations.map((chat) => (
+          {paged.rows.map((chat) => (
             <ChatItem
               key={chat.id}
               chat={chat}
@@ -146,6 +159,7 @@ export function SessionsPanel({ conversations, currentId, role, storage, onNew, 
           ))}
         </ul>
       )}
+      <PageControls paged={paged} noun="chats" label="Saved chats, pages" />
     </nav>
   );
 }

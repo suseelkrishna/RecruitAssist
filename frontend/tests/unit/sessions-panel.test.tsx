@@ -1,7 +1,7 @@
 /**
- * The saved chats panel: newest first as given, the open chat marked, Rename and Delete from
- * each chat's "More actions" menu (delete only after confirming), an empty state, and the
- * memory warning for admin only.
+ * The saved chats panel: newest first as given, oldest first on request, eight chats a page,
+ * the open chat marked, Rename and Delete from each chat's "More actions" menu (delete only
+ * after confirming), an empty state, and the memory warning for admin only.
  */
 
 import { render, screen, waitFor, within } from "@testing-library/react";
@@ -19,7 +19,7 @@ const CHATS: Conversation[] = [
 function renderPanel(overrides: Partial<Parameters<typeof SessionsPanel>[0]> = {}) {
   const props = {
     conversations: CHATS, currentId: "CONV-aaaaaaaaaaaa", role: "hr_user" as const,
-    onNew: vi.fn(), onOpen: vi.fn(), onRename: vi.fn(async () => {}), onDelete: vi.fn(), ...overrides,
+    onOpen: vi.fn(), onRename: vi.fn(async () => {}), onDelete: vi.fn(), ...overrides,
   };
   render(<SessionsPanel {...props} />);
   return props;
@@ -34,8 +34,40 @@ describe("SessionsPanel", () => {
     expect(screen.getByRole("button", { name: /^Newer chat/ }).getAttribute("aria-current")).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: /^Newer chat/ }));
     expect(props.onOpen).toHaveBeenCalledWith("CONV-bbbbbbbbbbbb");
-    await userEvent.click(screen.getByRole("button", { name: "New chat" }));
-    expect(props.onNew).toHaveBeenCalled();
+  });
+
+  it("shows the oldest chat first on request", async () => {
+    renderPanel();
+    await userEvent.click(screen.getByRole("radio", { name: "Oldest" }));
+    const items = within(screen.getByRole("navigation", { name: "Saved chats" })).getAllByRole("listitem");
+    expect(items.map((li) => li.querySelector(".session-title")?.textContent)).toEqual(["Older chat", "Newer chat"]);
+  });
+
+  it("shows eight chats a page and pages through the rest", async () => {
+    // Twenty chats, CHAT 1 newest. Built by hand so the test does not reuse the panel's paging.
+    const many: Conversation[] = Array.from({ length: 20 }, (_, i) => ({
+      id: `CONV-${String(i + 1).padStart(12, "0")}`, title: `CHAT ${i + 1}`,
+      created_at: "2026-11-09T16:00:00Z", updated_at: "2026-11-09T16:00:00Z", turn_count: 1,
+    }));
+    renderPanel({ conversations: many, currentId: null });
+    const titles = () => [...document.querySelectorAll(".session-title")].map((el) => el.textContent);
+    expect(titles()).toEqual(["CHAT 1", "CHAT 2", "CHAT 3", "CHAT 4", "CHAT 5", "CHAT 6", "CHAT 7", "CHAT 8"]);
+    expect(screen.getByText("Showing 1 to 8 of 20 chats")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Previous page" }) as HTMLButtonElement).disabled).toBe(true);
+    await userEvent.click(screen.getByRole("button", { name: "Next page" }));
+    await userEvent.click(screen.getByRole("button", { name: "Next page" }));
+    expect(titles()).toEqual(["CHAT 17", "CHAT 18", "CHAT 19", "CHAT 20"]);
+    expect(screen.getByText("Showing 17 to 20 of 20 chats")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Next page" }) as HTMLButtonElement).disabled).toBe(true);
+    // Changing the order starts again at page 1.
+    await userEvent.click(screen.getByRole("radio", { name: "Oldest" }));
+    expect(titles()[0]).toBe("CHAT 20");
+    expect(screen.getByText("Showing 1 to 8 of 20 chats")).toBeTruthy();
+  });
+
+  it("has no page buttons when every chat fits on one page", () => {
+    renderPanel();
+    expect(screen.queryByRole("button", { name: "Next page" })).toBeNull();
   });
 
   it("renames inline and saves with Enter", async () => {

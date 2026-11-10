@@ -4,6 +4,7 @@
  * Pending and overdue tasks from GET /api/tasks. The API groups them for the role: HR Users
  * see their own tasks, HR Managers their teams' tasks by recruiter, and Admin every task by
  * team. Each task is marked Explicit or Derived, and a derived task shows the rule behind it.
+ * Each group shows five tasks at a time, with page buttons when there are more.
  */
 
 import { Badge, Card, DataTable, Stack } from "@suseelkrishna/fieryfusion-react";
@@ -12,6 +13,7 @@ import { AppShell } from "@/components/AppShell";
 import { CitationChip } from "@/components/CitationChip";
 import { TaskStatus } from "@/components/JobStatus";
 import { Empty, ErrorState, LoadingSkeleton } from "@/components/PageStates";
+import { PageControls, usePaged } from "@/components/Paged";
 import { getTasks } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import type { BoardTask, TasksResponse } from "@/lib/types";
@@ -42,12 +44,18 @@ function tasksLabel(count: number, overdue: number): string {
   return `${count} ${count === 1 ? "task" : "tasks"}, ${overdue} overdue`;
 }
 
+/** Tasks shown on one page of a group. */
+const TASKS_PER_PAGE = 5;
+
+/** One group's tasks as a table, a page at a time. */
 function TaskTable({ tasks, caption }: { tasks: BoardTask[]; caption: string }) {
+  const paged = usePaged(tasks, TASKS_PER_PAGE);
   return (
+    <>
     <DataTable
       caption={caption}
       columns={["Status", "Kind", "Task", "Job", "Owner", "Due", "Days overdue", "Evidence"]}
-      rows={tasks.map((t) => [
+      rows={paged.rows.map((t) => [
         <TaskStatus key="status" status={t.status} />,
         <Kind key="kind" task={t} />,
         <Title key="title" task={t} />,
@@ -64,6 +72,8 @@ function TaskTable({ tasks, caption }: { tasks: BoardTask[]; caption: string }) 
         </span>,
       ])}
     />
+    <PageControls paged={paged} noun="tasks" label={`${caption}, pages`} />
+    </>
   );
 }
 

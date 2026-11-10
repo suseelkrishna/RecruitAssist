@@ -1,26 +1,33 @@
 "use client";
 
 /**
- * Ask: a conversation with the assistant. The recruiter types a question, or picks a
- * suggested one for their role, and each reply comes back whole, already checked by the
- * verifier. Follow-up questions carry the last few answered turns as history. The scope
- * header comes from GET /api/me. A question can arrive prefilled from the dashboard through
- * ?q= and ?job=. Chats are saved per user and listed beside the conversation (in a drawer on
- * narrow screens); ?c= opens one. The conversation state lives in useChat.
+ * Ask: a conversation with the assistant. The page opens on a new chat, with the question box
+ * and suggested questions for the role centered in the chat window. Each reply comes back
+ * whole, already checked by the verifier. Follow-up questions carry the last few answered
+ * turns as history. A question can arrive prefilled from the dashboard through ?q= and ?job=.
+ *
+ * The header holds the title, the user's scope from GET /api/me, New chat, the chat list
+ * toggle, and the job filter, apart from the chat window below it. Saved chats are listed in
+ * a panel to the left of the window that can be hidden (the choice is remembered in this
+ * browser), and in a drawer on narrow screens; ?c= opens one. The conversation state lives in
+ * useChat.
  */
 
-import { Button, Drawer, Field, Select, Stack } from "@suseelkrishna/fieryfusion-react";
+import { Button, Drawer, Field, Select } from "@suseelkrishna/fieryfusion-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { ChatInput } from "@/components/ChatInput";
 import { ChatThread } from "@/components/ChatThread";
+import { NewChatIcon } from "@/components/Icons";
 import { ErrorState, LoadingSkeleton } from "@/components/PageStates";
+import { RecruitBot } from "@/components/RecruitBot";
 import { SessionsPanel } from "@/components/SessionsPanel";
 import { getMe } from "@/lib/api";
 import type { MeResponse, Role } from "@/lib/types";
 import { useChat } from "@/lib/useChat";
 import { useLoad } from "@/lib/useLoad";
+import { usePreference } from "@/lib/usePreference";
 
 type Suggestion = { question: string; about: string };
 
@@ -42,14 +49,16 @@ const SUGGESTIONS: Record<Role, Suggestion[]> = {
   ],
 };
 
-/** The chat for the loaded user: saved chats beside the conversation and the question box. */
+/** The chat for the loaded user: the header, the saved chats panel, and the chat window. */
 function Chat({ me, initialId, initialQuestion, initialJob }: { me: MeResponse; initialId: string | null; initialQuestion: string; initialJob: string }) {
   const { summary, scope, user } = me;
   const chat = useChat(user.user_id, initialId);
   const [question, setQuestion] = useState(initialQuestion);
   const [jobId, setJobId] = useState(initialJob);
-  // Changes on every pick or New chat, so the drawer (keyed by it) closes even when the open chat stays the same.
+  const [showChats, setShowChats] = usePreference("ask-chats-open", true);
+  // Changes on every pick, so the drawer (keyed by it) closes even when the open chat stays the same.
   const [picks, setPicks] = useState(0);
+  const empty = chat.turns.length === 0;
 
   /** Send a question and clear the box. */
   function send(text: string) {
@@ -63,10 +72,6 @@ function Chat({ me, initialId, initialQuestion, initialJob }: { me: MeResponse; 
       currentId={chat.conversationId}
       role={user.role}
       storage={chat.storage}
-      onNew={() => {
-        chat.newChat();
-        setPicks((n) => n + 1);
-      }}
       onOpen={(id) => {
         chat.openChat(id);
         setPicks((n) => n + 1);
@@ -77,62 +82,84 @@ function Chat({ me, initialId, initialQuestion, initialJob }: { me: MeResponse; 
   );
 
   return (
-    <div className="ask-layout">
-      <aside className="ask-sessions">{panel}</aside>
-      <Stack gap={20} className="chat-page">
-        <div className="page-head">
-          <div>
-            <h1>Ask</h1>
-            <p>
-              Your scope: {summary.jobs} jobs, {summary.active_candidates} candidates, {summary.overdue_tasks} overdue tasks
-            </p>
+    <div className="ask-page">
+      <header className="ask-header">
+        <div className="ask-header-text">
+          <h1>Ask</h1>
+          <p>
+            Your scope: {summary.jobs} jobs, {summary.active_candidates} candidates, {summary.overdue_tasks} overdue tasks
+          </p>
+        </div>
+        <div className="ask-header-actions">
+          <div className="ask-toggle-wide">
+            <Button variant="secondary" aria-expanded={showChats} aria-controls="ask-sessions" onClick={() => setShowChats(!showChats)}>
+              {showChats ? "Hide chats" : "Show chats"}
+            </Button>
           </div>
-          <div className="ask-head-actions">
-            <div className="ask-chats-button">
-              {/* Keyed by the pick count, so picking or starting a chat closes the drawer. */}
-              <Drawer
-                key={picks}
-                title="Chats"
-                description="Your saved chats, newest first."
-                trigger={<Button variant="secondary">Chats</Button>}
-              >
-                {panel}
-              </Drawer>
-            </div>
-            <div className="field-narrow">
-              <Field label="Limit to one job">
-                <Select
-                  value={jobId}
-                  onChange={(e) => setJobId(e.target.value)}
-                  options={[{ label: "All jobs in my scope", value: "" }, ...scope.jobs.map((j) => ({ label: `${j.job_id} ${j.title}`, value: j.job_id }))]}
-                />
-              </Field>
-            </div>
+          <div className="ask-toggle-narrow">
+            {/* Keyed by the pick count, so picking a chat closes the drawer. */}
+            <Drawer
+              key={picks}
+              title="Chats"
+              description="Open, rename, or delete a saved chat."
+              trigger={<Button variant="secondary">Chats</Button>}
+            >
+              {panel}
+            </Drawer>
+          </div>
+          <Button className="button-with-icon" variant={empty ? "secondary" : "primary"} onClick={chat.newChat} disabled={empty && !chat.conversationId}>
+            <NewChatIcon />
+            New chat
+          </Button>
+          <div className="field-narrow">
+            <Field label="Limit to one job">
+              <Select
+                value={jobId}
+                onChange={(e) => setJobId(e.target.value)}
+                options={[{ label: "All jobs in my scope", value: "" }, ...scope.jobs.map((j) => ({ label: `${j.job_id} ${j.title}`, value: j.job_id }))]}
+              />
+            </Field>
           </div>
         </div>
+      </header>
 
-        {chat.turns.length === 0 ? (
-          <section aria-labelledby="suggested">
-            <h2 id="suggested" className="label-small">
-              Try one of these
-            </h2>
-            <ul className="grid grid-3 list-plain" style={{ marginTop: 8 }}>
-              {SUGGESTIONS[user.role].map((s) => (
-                <li key={s.question}>
-                  <button type="button" className="suggestion" onClick={() => send(s.question)}>
-                    <span className="suggestion-question">{s.question}</span>
-                    <span className="suggestion-about">{s.about}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : (
-          <ChatThread turns={chat.turns} role={user.role} isOpen={chat.isOpen} onToggle={chat.toggle} onRetry={chat.retry} />
+      <div className={showChats ? "ask-body ask-body-with-chats" : "ask-body"}>
+        {showChats && (
+          <aside id="ask-sessions" className="ask-sessions">
+            {panel}
+          </aside>
         )}
-
-        <ChatInput value={question} onChange={setQuestion} onSend={send} onStop={chat.stop} waiting={chat.waiting} />
-      </Stack>
+        {/* The question box keeps its place in this list, so it keeps focus when the first answer replaces the welcome. */}
+        <section className={empty ? "chat-window chat-window-empty" : "chat-window"} aria-label="Chat window">
+          {empty ? (
+            <div className="chat-welcome">
+              <RecruitBot size={72} />
+              <h2>What would you like to know?</h2>
+              <p>Ask about the jobs, candidates, and tasks in your scope. Every number is checked against the data before you see it.</p>
+            </div>
+          ) : (
+            <ChatThread turns={chat.turns} role={user.role} userName={user.name} isOpen={chat.isOpen} onToggle={chat.toggle} onRetry={chat.retry} />
+          )}
+          <ChatInput value={question} onChange={setQuestion} onSend={send} onStop={chat.stop} waiting={chat.waiting} />
+          {empty && (
+            <section aria-labelledby="suggested" className="chat-suggestions">
+              <h2 id="suggested" className="label-small">
+                Try one of these
+              </h2>
+              <ul className="grid grid-3 list-plain">
+                {SUGGESTIONS[user.role].map((s) => (
+                  <li key={s.question}>
+                    <button type="button" className="suggestion" onClick={() => send(s.question)}>
+                      <span className="suggestion-question">{s.question}</span>
+                      <span className="suggestion-about">{s.about}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

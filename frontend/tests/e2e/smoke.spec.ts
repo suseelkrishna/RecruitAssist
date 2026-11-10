@@ -3,7 +3,8 @@
  * open the pages their role allows, gets the not-found page for the ones it does not, can ask
  * a suggested question (against a stubbed /api/ask) and sees the trace only as admin, can
  * hold a follow-up conversation by keyboard on desktop and phone widths, keeps saved chats per
- * user across reloads and tabs, and an HR Manager can complete one reassignment.
+ * user across reloads and tabs, and an HR Manager can complete one reassignment. It also
+ * covers the collapsible navigation, the Ask page's new chat and chat list toggle, and paging.
  */
 
 import { expect, test, type Page } from "@playwright/test";
@@ -54,21 +55,11 @@ const NOT_FOUND = "This page is not available.";
  * A suggested question on an empty Ask chat. Scoped to the suggestions, because a saved chat
  * in the list can carry the same question as its title.
  */
-/**
- * Open Ask on a new, empty chat. Ask opens the newest saved chat, and earlier tests leave
- * chats behind in the shared store, so each Ask test starts from a clean chat. Below 1100px
- * the chat list is in the Chats drawer.
- */
+/** Open Ask, which always starts on a new, empty chat even when saved chats exist. */
 async function openNewChat(page: Page) {
   await page.goto("/ask");
+  await expect(page.getByRole("heading", { name: "What would you like to know?" })).toBeVisible();
   await expect(page.getByLabel("Your question")).toBeVisible();
-  if ((page.viewportSize()?.width ?? 1280) < 1100) {
-    await page.getByRole("button", { name: "Chats", exact: true }).click();
-    await page.getByRole("dialog").getByRole("button", { name: "New chat", exact: true }).click();
-    await expect(page.getByRole("dialog")).toHaveCount(0);
-  } else {
-    await page.getByRole("button", { name: "New chat", exact: true }).click();
-  }
   await expect(page).not.toHaveURL(/[?&]c=/);
 }
 
@@ -232,10 +223,56 @@ test("at phone width the Ask page never scrolls sideways", async ({ page }) => {
   const boxArea = (await box.boundingBox())!;
   const send = (await page.getByRole("button", { name: "Send" }).boundingBox())!;
   expect(send.y).toBeLessThan(boxArea.y + boxArea.height);
-  // New chat in the Chats drawer closes the drawer.
-  await page.getByRole("button", { name: "Chats" }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "New chat", exact: true }).click();
+  // New chat in the header goes back to the centered welcome, and picking a chat in the Chats
+  // drawer opens it and closes the drawer. The stubbed answer is not saved, so the newest chat
+  // keeps its default title.
+  await page.getByRole("button", { name: "New chat", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "What would you like to know?" })).toBeVisible();
+  await page.getByRole("button", { name: "Chats", exact: true }).click();
+  await page.getByRole("dialog").locator(".session-open").first().click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page).toHaveURL(/[?&]c=CONV-/);
+});
+
+test("the chat list can be hidden and shown, and the choice is remembered", async ({ page }) => {
+  await pickUser(page, "Sam Rivera, HR User");
+  await openNewChat(page);
+  const panel = page.getByRole("navigation", { name: "Saved chats" });
+  await expect(panel).toBeVisible();
+  await page.getByRole("button", { name: "Hide chats" }).click();
+  await expect(panel).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Show chats" })).toHaveAttribute("aria-expanded", "false");
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Show chats" })).toBeVisible();
+  await expect(panel).toHaveCount(0);
+  await page.getByRole("button", { name: "Show chats" }).click();
+  await expect(panel).toBeVisible();
+});
+
+test("the main menu collapses to icons, keeps its link names, and remembers the choice", async ({ page }) => {
+  await pickUser(page, "Suseel Maddali, Admin");
+  const nav = page.getByRole("navigation", { name: "Main" });
+  await nav.getByRole("button", { name: "Collapse menu" }).click();
+  const quality = nav.getByRole("link", { name: "Quality", exact: true });
+  await expect(quality).toBeVisible();
+  // The rail is narrow: the link is little more than its icon. The rail animates, so wait for it.
+  await expect.poll(async () => (await quality.boundingBox())!.width).toBeLessThan(60);
+  await page.reload();
+  await expect(nav.getByRole("button", { name: "Expand menu" })).toHaveAttribute("aria-expanded", "false");
+  await quality.click();
+  await expect(page.getByRole("heading", { level: 1, name: "Quality" })).toBeVisible();
+  await nav.getByRole("button", { name: "Expand menu" }).click();
+  await expect(nav.getByRole("button", { name: "Collapse menu" })).toHaveAttribute("aria-expanded", "true");
+});
+
+test("long task groups show five at a time with page buttons", async ({ page }) => {
+  await pickUser(page, "Suseel Maddali, Admin");
+  await page.goto("/tasks");
+  const pager = page.getByRole("group", { name: "Tasks: People, pages" });
+  await expect(pager).toContainText("Showing 1 to 5 of");
+  await pager.getByRole("button", { name: "Next page" }).click();
+  await expect(pager).toContainText("Showing 6 to");
+  await expect(pager.getByRole("button", { name: "Next page" })).toBeDisabled();
 });
 
 // Runs before the reassignment test, which can change Sam Rivera's scope and so the recordings that match.
@@ -258,8 +295,9 @@ test("a saved chat survives reloads and new tabs, stays with its user, and can b
   await page.reload();
   await expect(page.getByText(answer, { exact: false })).toBeVisible();
 
+  // A new tab with the chat's address reopens it; a plain /ask starts a new chat instead.
   const second = await context.newPage();
-  await second.goto("/ask");
+  await second.goto(page.url());
   await expect(second.getByText(answer, { exact: false })).toBeVisible();
   await expect(second.getByRole("navigation", { name: "Saved chats" }).getByRole("button", { name: new RegExp(`^${name}`) })).toBeVisible();
   await second.close();
@@ -342,6 +380,7 @@ for (const user of [USERS[0], USERS[1], USERS[3]]) {
       await expect(page.getByText(/: .*\.$/).first()).toBeVisible();
       const tiles = page.getByRole("region", { name: "What needs attention" }).getByRole("button");
       await expect(tiles).toHaveCount(5);
+      await expect(page.getByText("Click a card to view charts and analysis.")).toBeVisible();
       // Nothing heavy until a tile is opened: no chart and no dashboard request yet.
       await expect(page.getByRole("heading", { name: "Pipeline funnel" })).toHaveCount(0);
       const tile = page.getByRole("button", { name: /Active candidates/ });

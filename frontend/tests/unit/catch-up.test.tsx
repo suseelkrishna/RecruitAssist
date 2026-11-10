@@ -1,5 +1,6 @@
 /**
- * The catch-up view: greets by first name, shows the API's summary and tiles unchanged, opens
+ * The catch-up view: greets by first name, shows the API's summary and tiles unchanged, says
+ * the cards open, opens
  * one tile at a time, closes with Escape, and fetches the dashboard only for a chart tile.
  */
 
@@ -51,10 +52,14 @@ describe("CatchUp", () => {
     expect(screen.getByText(CATCH_UP.summary)).toBeTruthy();
     const tiles = screen.getAllByRole("button", { expanded: false });
     expect(tiles.map((t) => t.textContent)).toEqual([
-      "Overdue tasks4of 4 open tasks",
-      "Jobs past target2of 2 open jobs",
-      "Active candidates33across 4 jobs in your scope",
+      "Overdue tasks4of 4 open tasksView",
+      "Jobs past target2of 2 open jobsView",
+      "Active candidates33across 4 jobs in your scopeView",
     ]);
+    // The tile name is the heading of each card, and the "View" cue is not read out as part of its name.
+    expect(tiles[0].querySelector(".catchup-tile-label")?.textContent).toBe("Overdue tasks");
+    expect(screen.getByRole("button", { name: /^Overdue tasks.*open tasks$/ })).toBeTruthy();
+    expect(screen.getByText("Click a card to view charts and analysis.")).toBeTruthy();
     expect(screen.getByRole("link", { name: "View full dashboard" }).getAttribute("href")).toBe("/dashboard?view=full");
     expect(urls).toEqual(["/api/catch-up"]);
   });

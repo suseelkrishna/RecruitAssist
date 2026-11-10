@@ -4,7 +4,8 @@
  * The change log from GET /api/changes, newest first: reassignments and questions asked.
  * Question entries show only a short hash of the question, the tools used, the record IDs
  * touched, and the verifier result; no candidate text is stored. The log is append-only, so
- * there are no edit or delete controls. HR Users get the not-found page.
+ * there are no edit or delete controls. HR Users get the not-found page. The table shows
+ * ten entries at a time.
  */
 
 import { DataTable, SegmentedControl, StatusPill } from "@suseelkrishna/fieryfusion-react";
@@ -13,6 +14,7 @@ import { Suspense } from "react";
 import { AppShell } from "@/components/AppShell";
 import { CitationChip } from "@/components/CitationChip";
 import { Empty, ErrorState, LoadingSkeleton } from "@/components/PageStates";
+import { PageControls, usePaged } from "@/components/Paged";
 import { getChanges } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { useQueryFilters } from "@/lib/query";
@@ -49,6 +51,41 @@ function Details({ entry }: { entry: ChangeEntry }) {
   );
 }
 
+/** The log entries as a table, ten at a time, or an empty state. */
+function ChangesTable({ rows, kind }: { rows: ChangeEntry[]; kind: string }) {
+  const paged = usePaged(rows, 10, kind);
+  if (rows.length === 0)
+    return <Empty title="No entries yet" description="Reassignments and questions asked in your scope appear here." />;
+  return (
+    <>
+      <DataTable
+        caption="Change log, newest first"
+        columns={["When", "Who", "Role", "Kind", "What", "Details"]}
+        rows={paged.rows.map((c) => [
+          formatDateTime(c.at),
+          c.user_name ?? c.user_id,
+          c.user_role ? ROLE_LABELS[c.user_role] : "",
+          c.type === "reassignment" ? "Reassignment" : "Question asked",
+          <span key="what">
+            {c.type === "ask" ? (
+              <>
+                Question (text not stored)
+                <span className="cell-sub">
+                  Reference <span className="mono">{c.question_hash}</span>
+                </span>
+              </>
+            ) : (
+              c.summary
+            )}
+          </span>,
+          <Details key="details" entry={c} />,
+        ])}
+      />
+      <PageControls paged={paged} noun="entries" label="Change log, pages" />
+    </>
+  );
+}
+
 function Changes() {
   const [values, set] = useQueryFilters(["kind"] as const);
   const result = useLoad(getChanges, "changes");
@@ -65,42 +102,7 @@ function Changes() {
       </div>
       {result.state === "loading" && <LoadingSkeleton blocks={1} label="Loading the change log" />}
       {result.state === "error" && <ErrorState message={result.message} onRetry={result.reload} />}
-      {result.state === "ready" &&
-        (() => {
-          const rows = result.data.changes.filter((c) => !values.kind || c.type === values.kind);
-          if (rows.length === 0)
-            return (
-              <Empty
-                title="No entries yet"
-                description="Reassignments and questions asked in your scope appear here."
-              />
-            );
-          return (
-            <DataTable
-              caption="Change log, newest first"
-              columns={["When", "Who", "Role", "Kind", "What", "Details"]}
-              rows={rows.map((c) => [
-                formatDateTime(c.at),
-                c.user_name ?? c.user_id,
-                c.user_role ? ROLE_LABELS[c.user_role] : "",
-                c.type === "reassignment" ? "Reassignment" : "Question asked",
-                <span key="what">
-                  {c.type === "ask" ? (
-                    <>
-                      Question (text not stored)
-                      <span className="cell-sub">
-                        Reference <span className="mono">{c.question_hash}</span>
-                      </span>
-                    </>
-                  ) : (
-                    c.summary
-                  )}
-                </span>,
-                <Details key="details" entry={c} />,
-              ])}
-            />
-          );
-        })()}
+      {result.state === "ready" && <ChangesTable rows={result.data.changes.filter((c) => !values.kind || c.type === values.kind)} kind={values.kind} />}
     </>
   );
 }

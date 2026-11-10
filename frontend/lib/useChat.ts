@@ -76,11 +76,11 @@ function putChatInUrl(id: string | null): void {
 
 /**
  * The chat state for one demo user. The page mounts this only in the browser, after the user
- * has loaded, so the cached list and chat can be read straight away: ?c= when given, else
- * the newest cached chat.
+ * has loaded, so the cached list and chat can be read straight away. Ask opens on a new, empty
+ * chat; ?c= opens a saved one instead.
  */
 export function useChat(userId: string, initialId: string | null) {
-  const [startId] = useState(() => initialId ?? cachedList(userId)[0]?.id ?? null);
+  const [startId] = useState(initialId);
   const [conversations, setConversations] = useState<Conversation[]>(() => cachedList(userId));
   const [storage, setStorage] = useState<"memory" | "redis" | undefined>(undefined);
   const [conversationId, setConversationId] = useState<string | null>(startId);
@@ -150,17 +150,14 @@ export function useChat(userId: string, initialId: string | null) {
     putChatInUrl(null);
   }, []);
 
-  // On first load: fetch the chat shown from the cache (or ?c=), and the list. With neither,
-  // open the newest saved chat once the list arrives, else stay on an empty chat.
+  // On first load: fetch the chat named by ?c= (shown from the cache meanwhile), and the list.
   useEffect(() => {
     if (startId) {
       putChatInUrl(startId);
       void loadChat(startId);
     }
-    void refreshList().then((list) => {
-      if (current.current === null && list && list.length > 0) openChat(list[0].id);
-    });
-  }, [startId, loadChat, refreshList, openChat]);
+    void refreshList();
+  }, [startId, loadChat, refreshList]);
 
   // Pick up changes from other tabs: on focus, on becoming visible, and when another tab writes the cache.
   useEffect(() => {

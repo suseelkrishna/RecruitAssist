@@ -10,9 +10,12 @@ import { describe, expect, it, vi } from "vitest";
 import AskPage from "@/app/ask/page";
 import type { AskResult, Role } from "@/lib/types";
 
+// The page's query string; a test that opens a saved chat sets ?c= here.
+let search = new URLSearchParams();
+
 vi.mock("next/navigation", () => ({
   usePathname: () => "/ask",
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => search,
   notFound: () => {
     throw new Error("not found");
   },
@@ -177,7 +180,35 @@ describe("Saved chats", () => {
     expect(calls.filter((c) => c === "POST /api/conversations")).toHaveLength(1);
   });
 
+  it("opens on a new chat, not the newest saved one", async () => {
+    const saved = { id: "CONV-cccccccccccc", title: "Yesterday's chat", created_at: "2026-11-08T16:00:00Z", updated_at: "2026-11-08T16:00:00Z", turn_count: 1 };
+    const calls: string[] = [];
+    stubBackend("hr_user", () => answer("Unused.", []), calls);
+    const fetchStub = vi.mocked(fetch);
+    const original = fetchStub.getMockImplementation()!;
+    fetchStub.mockImplementation(async (url, init) =>
+      url === "/api/conversations" && !init?.method
+        ? new Response(JSON.stringify({ conversations: [saved] }), { status: 200, headers: { "Content-Type": "application/json" } })
+        : original(url, init));
+    setup();
+    expect(await screen.findByRole("heading", { name: "What would you like to know?" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: /^Yesterday's chat/ })).toBeTruthy();
+    expect(calls.some((c) => c.startsWith("GET /api/conversations/"))).toBe(false);
+    expect(screen.queryByRole("log")).toBeNull();
+    expect(screen.getByRole("region", { name: "Try one of these" })).toBeTruthy();
+  });
+
+  it("shows the user's initials beside a question and RecruitBot beside the reply", async () => {
+    stubBackend("hr_user", () => answer("Two tasks are overdue.", []));
+    const user = setup();
+    await user.type(await box(), "What is overdue?{Enter}");
+    const turn = (await screen.findByText("Two tasks are overdue.")).closest("li")!;
+    expect(turn.querySelector(".chat-row-user .ff-avatar")?.textContent).toBe("TU");
+    expect(turn.querySelector(".chat-row-assistant svg.recruitbot")).toBeTruthy();
+  });
+
   it("shows the cached chat before the backend answers", async () => {
+    search = new URLSearchParams("c=CONV-bbbbbbbbbbbb");
     const cached = { id: "CONV-bbbbbbbbbbbb", title: "Cached chat", created_at: "2026-11-09T16:00:00Z", updated_at: "2026-11-09T16:00:00Z", turn_count: 1 };
     window.localStorage.setItem("recruitassist:chats:USR-9", JSON.stringify({
       list: [cached],
@@ -193,6 +224,7 @@ describe("Saved chats", () => {
     expect(await screen.findByText("From the cache.")).toBeTruthy();
     expect(screen.getAllByText("Cached chat").length).toBeGreaterThan(0);
     window.localStorage.clear();
+    search = new URLSearchParams();
   });
 
   it("works when storage is blocked", async () => {

@@ -4,7 +4,7 @@ RecruitAssist answers a recruiter's questions about a hiring pipeline, such as "
 
 **Live site:** https://recruitassist.vercel.app
 
-![The Ask page: an Admin asks for the top 3 candidates for a role and gets a verified, cited ranking that also warns about the degraded Interview notes integration, with saved chats beside it](docs/screenshot-ask.png)
+![The Ask page: an Admin asks for the top 3 candidates for a role and gets a verified, cited ranking that also warns about the degraded Interview notes integration, with saved chats in a panel beside the chat window](docs/screenshot-ask.png)
 
 All data is synthetic. The company, Northbeam Robotics, is fictional, and so are its people, schools, and employers.
 
