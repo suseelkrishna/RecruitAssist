@@ -3,7 +3,8 @@
 /**
  * The catch-up view, the first page after picking a demo user. It greets the user by first
  * name, gives one line on what needs attention, and shows a few headline tiles from
- * GET /api/catch-up. Clicking a tile opens its detail in one panel below the tiles. The
+ * GET /api/catch-up. Each tile leads with its name as a copper heading and looks like a
+ * button, and a short note says the tiles open. Clicking a tile opens its detail in one panel below the tiles. The
  * dashboard data behind the charts loads only when a chart tile is opened, so nothing heavy
  * runs until someone asks for it.
  */
@@ -15,6 +16,7 @@ import { ApplicantsChart } from "@/components/charts/ApplicantsChart";
 import { DaysOpenChart } from "@/components/charts/DaysOpenChart";
 import { FunnelChart } from "@/components/charts/FunnelChart";
 import { OfferAcceptanceChart } from "@/components/charts/OfferAcceptanceChart";
+import { ArrowIcon } from "@/components/Icons";
 import { Empty, ErrorState, LoadingSkeleton } from "@/components/PageStates";
 import { getCatchUp, getDashboard } from "@/lib/api";
 import { show } from "@/lib/format";
@@ -104,6 +106,7 @@ export function CatchUp() {
       </div>
 
       <section aria-label="What needs attention">
+        <p className="catchup-hint muted">Click a card to view charts and analysis.</p>
         <ul className="grid catchup-tiles list-plain">
           {data.tiles.map((t) => (
             <li key={t.key}>
@@ -117,9 +120,13 @@ export function CatchUp() {
                 aria-controls={panelId}
                 onClick={() => toggle(t.key)}
               >
-                <span className="kpi-label">{t.label}</span>
+                <span className="catchup-tile-label">{t.label}</span>
                 <span className="kpi-value">{show(t.value)}</span>
                 <span className="catchup-note">{t.note}</span>
+                <span className="catchup-open" aria-hidden="true">
+                  {open === t.key ? "Hide" : "View"}
+                  <ArrowIcon />
+                </span>
               </button>
             </li>
           ))}

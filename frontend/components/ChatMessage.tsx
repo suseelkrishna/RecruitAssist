@@ -1,18 +1,19 @@
 "use client";
 
 /**
- * One turn of the Ask conversation: the question in a bubble on the right, and the
- * assistant's reply on the left. The reply is a waiting counter while the answer is on its
+ * One turn of the Ask conversation: the question in a bubble on the right with the user's
+ * initials beside it, and the assistant's reply on the left beside RecruitBot. The reply is a waiting counter while the answer is on its
  * way, the answer with its badges and hidden evidence when it arrives, or a note with Retry
  * when the question was stopped or failed.
  */
 
-import { Button } from "@suseelkrishna/fieryfusion-react";
+import { Avatar, Button } from "@suseelkrishna/fieryfusion-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AnswerText } from "@/components/AnswerText";
 import { MessageBadges } from "@/components/MessageBadges";
 import { MessageEvidence } from "@/components/MessageEvidence";
+import { RecruitBot } from "@/components/RecruitBot";
 import type { Role } from "@/lib/types";
 import type { Panel, Turn } from "@/lib/useChat";
 
@@ -42,19 +43,29 @@ function Waiting() {
   );
 }
 
-export function ChatMessage({ turn, role, isOpen, onToggle, onRetry }: {
+export function ChatMessage({ turn, role, userName, isOpen, onToggle, onRetry }: {
   turn: Turn;
   role: Role;
+  userName: string;
   isOpen: (panel: Panel) => boolean;
   onToggle: (panel: Panel) => void;
   onRetry: () => void;
 }) {
   return (
     <li className="chat-turn">
-      <div className="bubble bubble-user">
-        <span className="visually-hidden">You asked: </span>
-        {turn.question}
+      <div className="chat-row chat-row-user">
+        <div className="bubble bubble-user">
+          <span className="visually-hidden">You asked: </span>
+          {turn.question}
+        </div>
+        <span className="chat-avatar" aria-hidden="true">
+          <Avatar name={userName} size="sm" />
+        </span>
       </div>
+      <div className="chat-row chat-row-assistant">
+      <span className="chat-avatar">
+        <RecruitBot size={34} />
+      </span>
       <div className="bubble bubble-assistant" aria-busy={turn.state === "pending"}>
         <span className="visually-hidden">Assistant: </span>
         {turn.state === "pending" && <Waiting />}
@@ -87,6 +98,7 @@ export function ChatMessage({ turn, role, isOpen, onToggle, onRetry }: {
             <MessageEvidence id={turn.id} result={turn.result} role={role} isOpen={isOpen} onToggle={onToggle} />
           </>
         )}
+      </div>
       </div>
     </li>
   );

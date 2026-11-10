@@ -10,9 +10,10 @@ import { ChatMessage } from "@/components/ChatMessage";
 import type { Role } from "@/lib/types";
 import type { Panel, Turn } from "@/lib/useChat";
 
-export function ChatThread({ turns, role, isOpen, onToggle, onRetry }: {
+export function ChatThread({ turns, role, userName, isOpen, onToggle, onRetry }: {
   turns: Turn[];
   role: Role;
+  userName: string;
   isOpen: (id: string, panel: Panel) => boolean;
   onToggle: (id: string, panel: Panel) => void;
   onRetry: (id: string) => void;
@@ -31,13 +32,14 @@ export function ChatThread({ turns, role, isOpen, onToggle, onRetry }: {
             key={turn.id}
             turn={turn}
             role={role}
+            userName={userName}
             isOpen={(panel) => isOpen(turn.id, panel)}
             onToggle={(panel) => onToggle(turn.id, panel)}
             onRetry={() => onRetry(turn.id)}
           />
         ))}
       </ol>
-      <div ref={end} />
+      <div ref={end} className="chat-end" />
     </div>
   );
 }

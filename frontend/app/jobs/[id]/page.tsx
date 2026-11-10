@@ -4,18 +4,20 @@
  * One job from GET /api/jobs/{id}: its funnel, ranked candidates, the top 3 with the score
  * breakdown, open tasks, and the current recruiter. Users the API marks with can_reassign see
  * a Reassign button. A job outside the user's scope comes back as 404 and shows not found.
+ * The candidate table shows ten rows at a time and the task table five.
  */
 
 import { ButtonLink, Card, DataTable, Stack, StatusPill, Toast } from "@suseelkrishna/fieryfusion-react";
 import Link from "next/link";
 import { notFound, useParams } from "next/navigation";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AppShell } from "@/components/AppShell";
 import { AXIS, COLORS, STILL, TOOLTIP } from "@/components/charts/theme";
 import { CitationChip } from "@/components/CitationChip";
 import { JobStatus, TargetStatus, TaskStatus } from "@/components/JobStatus";
 import { Empty, ErrorState, LoadingSkeleton } from "@/components/PageStates";
+import { PageControls, usePaged } from "@/components/Paged";
 import { ReassignForm } from "@/components/ReassignForm";
 import { getJob } from "@/lib/api";
 import { formatDate, show } from "@/lib/format";
@@ -185,17 +187,20 @@ function JobPage({ job, onReassigned }: { job: JobDetail; onReassigned: (message
         {job.candidates.length === 0 ? (
           <Empty title="No active candidates" description="This job has no active applications." />
         ) : (
-          <DataTable
+          <PagedTable
+            items={job.candidates}
+            size={10}
+            noun="candidates"
             caption="Active candidates, ranked"
             columns={["Rank", "Candidate", "Application", "Stage", "Score", "Scorecards"]}
-            rows={job.candidates.map((c) => [
+            row={(c) => [
               c.rank,
               c.full_name,
               <CitationChip key="id" id={c.application_id} />,
               c.current_stage,
               <span key="score">{c.score_100} / 100</span>,
               c.incomplete_evidence ? <StatusPill key="ev" tone="warning">Scorecards missing</StatusPill> : <StatusPill key="ev" tone="success">Scorecards in</StatusPill>,
-            ])}
+            ]}
           />
         )}
       </Card>
@@ -205,10 +210,13 @@ function JobPage({ job, onReassigned }: { job: JobDetail; onReassigned: (message
         {job.tasks.length === 0 ? (
           <Empty title="No open tasks" description="Nothing is pending or overdue on this job." />
         ) : (
-          <DataTable
+          <PagedTable
+            items={job.tasks}
+            size={5}
+            noun="tasks"
             caption="Open tasks on this job"
             columns={["Status", "Task", "Owner", "Due", "Days overdue", "Kind", "Evidence"]}
-            rows={job.tasks.map((t) => [
+            row={(t) => [
               <TaskStatus key="s" status={t.status} />,
               t.title,
               t.owner_name ?? "Unassigned",
@@ -220,11 +228,29 @@ function JobPage({ job, onReassigned }: { job: JobDetail; onReassigned: (message
                   <CitationChip key={id} id={id} />
                 ))}
               </span>,
-            ])}
+            ]}
           />
         )}
       </Card>
     </Stack>
+  );
+}
+
+/** A kit table that shows `size` rows at a time, with page buttons when there are more. */
+function PagedTable<T>({ items, size, noun, caption, columns, row }: {
+  items: T[];
+  size: number;
+  noun: string;
+  caption: string;
+  columns: string[];
+  row: (item: T) => ReactNode[];
+}) {
+  const paged = usePaged(items, size);
+  return (
+    <>
+      <DataTable caption={caption} columns={columns} rows={paged.rows.map(row)} />
+      <PageControls paged={paged} noun={noun} label={`${caption}, pages`} />
+    </>
   );
 }
 
