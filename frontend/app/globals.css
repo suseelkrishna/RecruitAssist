@@ -751,6 +751,7 @@ span.chip {
 }
 
 .info-tip .ff-button {
+  position: relative;
   min-height: 0;
   width: 20px;
   height: 20px;
@@ -770,6 +771,11 @@ span.chip {
   font-style: normal;
   font-weight: 700;
   line-height: 1;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .quality-meta {
@@ -1011,6 +1017,17 @@ span.chip {
 
 .heading-with-info > :first-child {
   margin-bottom: 0;
+}
+
+/* The heading's line box is taller than its letters and the letters sit above its centre,
+   so a box-centred (i) looks low. These small lifts line it up with the letters. */
+.heading-with-info > h1 + .info-tip {
+  transform: translateY(-1px);
+}
+
+.heading-with-info > h2 + .info-tip,
+.heading-with-info > h3 + .info-tip {
+  transform: translateY(-0.5px);
 }
 
 .heading-with-info + * {
