@@ -68,17 +68,40 @@ Full detail on the data, roles, tools, and scoring: [docs/design-details.md](doc
 
 ## Key design decisions and tradeoffs
 
+### Deterministic and non-deterministic parts
+
 - **Code computes, the model explains.** Numbers are always right, but the assistant can only answer what the tools cover.
-- **There is no SQL tool.** Each tool runs fixed, parameterized SQL filtered by scope, so the model cannot compute its own numbers or bypass access control.
-- **Access is enforced in the backend.** The browser and the model are outside the trust boundary; the principal is never a tool argument, and hiding a page in the UI is not access control.
-- **One set of logic functions** serves both the dashboard and the assistant, so they cannot disagree.
 - **Deterministic code where correctness matters.** Plain scripts compute every metric, score, task rule, and access check, and grade the evals. The verifier is deterministic too, not an AI judge: it is fast, free, and explainable.
-- **The model where flexibility helps.** Claude Haiku 5.5 reads free-form questions, picks which tools to call, handles follow-ups and ambiguous wording, explains the results in plain English, and gets one retry when the verifier rejects an answer, because recruiters ask the same thing in many ways. The evals run each question 3 times to measure that variation, and an optional LLM judge scores faithfulness and clarity, which no script can rate, while pass or fail still comes from the deterministic checks.
+- **The model where flexibility helps.** Claude Haiku 5.5 reads free-form questions, picks which tools to call, handles follow-ups and ambiguous wording, explains the results in plain English, and gets one retry when the verifier rejects an answer, because recruiters ask the same thing in many ways.
+- **One set of logic functions** serves both the dashboard and the assistant, so they cannot disagree.
 - **Fixed "as of" time.** Answers are repeatable and testable, but the data does not move with the clock.
-- **Recorded answers as a fallback.** The suggested questions always work, even without an API key or past the rate limits, and the page labels them as recorded.
+
+### Memory and context handling
+
+- **One compact user turn per question.** It holds the scope card, the "as of" time, the selected job, recent history, and the question.
+- **Short history.** A follow-up carries at most the last 6 questions and answers, with each answer cut at 1,500 characters and the oldest dropped until the history fits in 6,000 characters. History keeps the record IDs each answer cited but never raw tool results, and the prompt tells the model to call the tools again rather than reuse old numbers.
+- **Prompt caching.** The tools are sorted by name and the system prompt is frozen, so every request starts with the same cached prefix, and the conversation is cached between tool rounds.
+- **Saved chats.** Chats are saved on the server per demo user for 30 days (the last 50, up to 30 questions each), in the same store as the change log.
+- **Compact tool output.** Tools return small JSON with stable IDs instead of whole records, which keeps the context small.
+
+### Harness engineering
+
+- **MCP in process.** The agent loop talks to the same MCP server that Claude Code uses, over the in-memory transport, so the principal is set per request and is never a tool argument.
+- **Bounded loop.** Tool calls in a round run at the same time, the loop stops after 6 model calls, and every stop reason (answered, truncated, refused, round limit) is handled.
+- **Strict tools.** Tools reject unknown arguments and badly formed IDs with an error that lists the valid options.
+- **One LLM interface.** Anthropic and OpenAI adapters share one shape, so the loop, tools, and verifier are identical for every model the evals compare.
 - **Plain code.** FastAPI, Next.js, plain SQL, and plain `fetch`, with no ORM, agent framework, or state library, so every part can be read end to end.
 
-## How answers are grounded and verified
+### Guardrails
+
+- **There is no SQL tool.** Each tool runs fixed, parameterized SQL filtered by scope, so the model cannot compute its own numbers or bypass access control.
+- **Access is enforced in the backend.** The browser and the model are outside the trust boundary; the principal is never a tool argument, and hiding a page in the UI is not access control.
+- **The agent cannot write.** The only write is a recruiter reassignment made by a person, with a confirmation step and an append-only change log.
+- **Untrusted text stays data.** Text from candidates and interviewers is wrapped as `{"untrusted_text": ...}`, contact details are masked, and the CV does not affect the score.
+- **Spending limits.** Live answers are limited per IP address per hour and per day across all visitors, and the app refuses an OpenAI model unless `ALLOW_OPENAI_LIVE=1`.
+- **Recorded answers as a fallback.** The suggested questions always work, even without an API key or past the rate limits, and the page labels them as recorded.
+
+### Evals and benchmarks
 
 The system prompt sets a contract: every number comes from a tool result in the same turn, every claim about a candidate cites an evidence ID, a ranked list keeps the `score_candidates` order, missing or stale data is stated plainly, and text from candidates is data, never instructions.
 The verifier then checks every answer without AI:
@@ -89,12 +112,13 @@ The verifier then checks every answer without AI:
 
 If a check fails, the model gets one retry; if that also fails, the answer is labeled "Unverified".
 
-Results:
-- **Tests:** 402 backend tests (including 20 data invariant tests), 47 frontend component tests, and 27 Playwright smoke tests.
-- **Mutation check:** 12 of 12 planted bugs caught, across scoring, task rules, access, and the verifier.
-- **RBAC matrix:** every logic function run as each of the 6 users, against scope computed with separate SQL.
-- **Evals:** 18 questions, 3 repeats each, graded by code; the default setting passed 54 of 54 runs, 96.3% verified.
-- **Multi-tool evals:** 12 more questions that need two or three tools, including follow-ups and a half out-of-scope question; Haiku 5.5 at low effort passed 12 of 12, all verified, with 3.6 tool calls per question for $0.03 in total.
+The evals run 18 questions 3 times each to measure variation, graded by code, plus a separate group of 12 questions that need two or three tools. An optional LLM judge scores faithfulness and clarity, which no script can rate, while pass or fail still comes from the deterministic checks. Tests, the RBAC matrix, and a planted-bug mutation check feed the admin-only Quality page. Model results are under Model choice and in [backend/evals/results.md](backend/evals/results.md).
+
+### Scalability
+
+- **Stateless API.** The backend runs as Vercel functions; the change log, reassignments, rate limits, and saved chats live in Upstash Redis, so every instance shares them.
+- **Read-only data file.** The SQLite database is committed and built from a fixed seed, which is fast and repeatable at this size; a real deployment needs a managed database (see Future direction).
+- **Cheap per question.** The default model at low effort with prompt caching costs a fraction of a cent per question, and the catch-up page loads each tile only when it is opened.
 
 ## Model choice
 
@@ -126,26 +150,27 @@ I built this with spec-driven development: I wrote the plans and spec docs, did 
 - Independent tests: expected values come from separate SQL or hand-built fixtures, not from the code under test.
 - Mutation testing: deliberate bugs in scoring, task rules, access, and the verifier, to confirm the tests catch them (12 of 12 in the latest run).
 - SQL review: every query in `backend/app/` was read for scope filtering and parameter binding.
-- Eval transcripts: failing and borderline runs were read in full, with findings in `backend/evals/results.md` and Known limitations.
+- Eval transcripts: failing and borderline runs were read in full, with findings in `backend/evals/results.md` and Future direction.
 
-## Known limitations
+## Future direction (connecting to a real ATS)
 
-- There is no real authentication. Anyone can pick any demo user.
+**Known limitations today:**
+- There is no real authentication. Anyone can pick any demo user, and with it see that user's saved chats and, as Admin, the Quality page and Show trace.
 - Integration health is simulated from the `source_syncs` table. No external system is called.
 - The data is small: 7 jobs and 110 applications.
-- Without Upstash Redis, the change log, reassignments, and rate limits live in memory and reset when the backend restarts. The live site currently runs this way.
+- Without Upstash Redis, the change log, reassignments, rate limits, and saved chats live in memory and reset when the backend restarts.
 - Recorded answers exist only for the suggested questions. Other questions need a live answer.
 
-## Connecting to a real ATS
-
-- Company SSO in place of the demo user switcher, with roles and teams read from the identity provider.
-- Read-only OAuth to the ATS, for example the Greenhouse Harvest API, synced by webhook into a read replica.
-- Row-level security in the replica as a second layer behind the SQL scope filter.
-- An audit table of who asked what, which tools ran, and which records each answer cited, with retention and deletion that follow the ATS.
-- Enterprise model terms with zero data retention, regular bias audits of rankings, and a shadow-mode rollout before anyone relies on the answers.
-- Database: replace the committed read-only SQLite file with a managed Postgres read replica, with schema migrations, connection pooling, indexes on the scope columns, and precomputed views for funnel and time-in-stage metrics so tools stay fast as data grows.
-- Memory and state: move the change log, reassignments, rate limits, and conversation history out of process memory into Redis with expiry times, so every server instance shares state and nothing resets on a restart, and cap tool output and summarize long histories to keep the model's context small.
-- Scale: keep the API stateless so it scales out, run the ATS sync in background workers, cache tool results per scope and data version, queue long questions and stream progress to the page, and set spend limits and data separation per company.
-- Better harness engineering: run the evals on every change with regression gates, add questions drawn from real recruiter use, trace every tool call and verifier result, add a larger prompt injection suite, replay real traces as new eval cases, and check the AI judge against human labels.
+**How this would grow:**
+- **Identity and access:** company SSO in place of the demo user switcher, with roles and teams read from the identity provider, and row-level security in the database as a second layer behind the SQL scope filter.
+- **Data and storage:** read-only OAuth to the ATS, for example the Greenhouse Harvest API, synced by webhook into a managed Postgres read replica, with schema migrations, connection pooling, indexes on the scope columns, and precomputed views for funnel and time-in-stage metrics.
+- **Deployment:** separate staging and production, preview deploys per pull request with evals as a release gate, secrets in a secret manager, enterprise model terms with zero data retention, and a shadow-mode rollout before anyone relies on the answers.
+- **Memory and context:** summarize long chats instead of cutting them, cap tool output size, and keep all state in Redis with expiry times, with an audit table of who asked what, which tools ran, and which records each answer cited, kept and deleted in line with the ATS.
+- **More tools:** more tools for more robust answers and fuller use of the pipeline, such as a stage filter on `pipeline_by_job`, a date range on `funnel_dropoff`, withdrawal reasons kept apart from rejections, and a one-call job summary. These are not built yet because each tool ships only with tests against separate SQL, a place in the RBAC matrix, eval questions, and re-recorded answers, and in the time available nine well-tested tools came before more tools.
+- **Structured citations:** return each answer as claims linked to the record ID and the tool field behind each number, so the verifier checks every number against its own field and the page shows the source of each sentence.
+- **Better evals:** more questions drawn from real recruiter use, more repeats, every model rerun on the current tools, a larger prompt injection suite, and the AI judge checked against human labels.
+- **Better harness:** trace every tool call and verifier result, replay real traces as new eval cases, stream progress to the page, queue long questions, and fall back to a second model when a provider fails.
+- **Scale for real load:** keep the API stateless so it scales out, run the ATS sync in background workers, cache tool results per scope and data version, load test at expected traffic, and set spend limits and data separation per company.
+- **CVs as a ranking signal, safely:** a separate extraction step with no tools turns each CV into fixed fields (skills, years of experience, certifications) checked against a schema; ranking uses only those fields with weights set in code, never the raw text; recruiters see and can correct the extracted fields; and bias audits of rankings run before the signal is turned on and on a schedule after. People still make every hiring decision.
 
 Running the code yourself or deploying a copy: [docs/running-locally.md](docs/running-locally.md).
