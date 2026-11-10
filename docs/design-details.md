@@ -126,13 +126,13 @@ The table shows the better effort setting for each model. All 12 settings, with 
 - The OpenAI models were a little faster (5.0 to 6.4 s at p50) and `gpt-6-luna` was the cheapest model tested, but none came within 5 points of the best verified pass rate.
 - Their misses cluster in a few questions. They often left out candidates the answer should list (the CV injection question and the withdrawn-candidate follow-up), and on the two questions about data that does not exist they often did not say plainly that it is missing.
 - Citation validity was 100% and contact details never leaked for any model, so the tools and verifier held the line on grounding and privacy for both providers.
-- The LLM judge rated the OpenAI answers clearer (4.2 to 4.4 against 3.4 to 3.8 out of 5) with similar faithfulness. The deterministic checks, which decide pass or fail, weigh completeness more than style.
+- The LLM judge rated the OpenAI answers clearer (4.2 to 4.4 against 3.4 to 3.7 out of 5) with similar faithfulness. The deterministic checks, which decide pass or fail, weigh completeness more than style.
 
 **Limits.**
 - 18 questions with 3 repeats is a small sample; a difference of a few points between two settings is within noise.
 - The system prompt and tool descriptions were written and tuned while developing with Claude, which may favor Claude. No OpenAI-specific prompt tuning was done.
 - OpenAI prices came from third-party trackers and are marked `confirm: true` in `models.json` until checked against OpenAI's own price page.
-- Claude results other than Haiku 5.5 low come from the earlier run on the same day and data, before the tool changes; only the OpenAI runs and the Haiku 5.5 low rerun are newer. The judge was not rerun, so the Haiku 5.5 low row has no judge scores.
+- Claude results other than Haiku 5.5 low come from the earlier run on the same day and data, before the tool changes; only the OpenAI runs and the Haiku 5.5 low rerun are newer. The Haiku 5.5 low rerun was judged afterwards with the same judge and rubric.
 - In the first run the people-overdue question failed for every model, Claude and OpenAI. After `pending_tasks` started returning the degraded Interview notes integration, Haiku 5.5 low passed it 3 of 3 times; the other settings were not rerun.
 
 OpenAI is used for eval runs only. The app refuses an OpenAI model unless `ALLOW_OPENAI_LIVE=1` is set, and every live answer, whatever the provider, counts against the same per-IP limit and daily cap.

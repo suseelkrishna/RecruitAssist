@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-11-09T17:48:20Z",
+ "generated_at": "2026-11-10T00:18:17Z",
  "as_of": "2026-11-09T17:00:00Z",
  "data_hash": "e6c74753bb7687e6cddd0ebbe626fbfb12bbf44140d6c03cdd88349eafc6e249",
  "questions": 18,
@@ -55,7 +55,11 @@
    "cache_read_share_pct": 68.8,
    "cost_per_question_usd": 0.0014,
    "total_cost_usd": 0.0744,
-   "llm_judge": null,
+   "llm_judge": {
+    "judged": 18,
+    "faithfulness": 3.89,
+    "clarity": 3.61
+   },
    "per_question": {
     "ambiguous-engineer": {
      "passed": 3,
@@ -172,9 +176,9 @@
    "cost_per_question_usd": 0.0017,
    "total_cost_usd": 0.0934,
    "llm_judge": {
-    "judged": 17,
-    "faithfulness": 3.94,
-    "clarity": 3.76
+    "judged": 18,
+    "faithfulness": 4.0,
+    "clarity": 3.72
    },
    "per_question": {
     "ambiguous-engineer": {
@@ -772,9 +776,9 @@
    "cost_per_question_usd": 0.0004,
    "total_cost_usd": 0.0236,
    "llm_judge": {
-    "judged": 17,
-    "faithfulness": 3.88,
-    "clarity": 4.35
+    "judged": 18,
+    "faithfulness": 3.78,
+    "clarity": 4.28
    },
    "per_question": {
     "ambiguous-engineer": {

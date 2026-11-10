@@ -1,13 +1,13 @@
 {
-  "generated_at": "2026-11-09T23:25:43Z",
-  "git_commit": "59866a8",
-  "git_dirty": false,
+  "generated_at": "2026-11-10T00:18:54Z",
+  "git_commit": "58c354a",
+  "git_dirty": true,
   "tests": {
-    "passed": 402,
+    "passed": 405,
     "failed": 0,
     "skipped": 0,
-    "total": 402,
-    "duration_s": 3.77
+    "total": 405,
+    "duration_s": 3.78
   },
   "rbac": {
     "passed": 28,
@@ -19,9 +19,9 @@
     "caught": 12,
     "total": 12,
     "score": 1.0,
-    "ran_at": "2026-11-09T23:25:47Z",
-    "git_commit": "59866a8",
-    "duration_s": 30.9,
+    "ran_at": "2026-11-10T00:18:59Z",
+    "git_commit": "58c354a",
+    "duration_s": 31.3,
     "mutants": [
       {
         "id": "scoring-weights",
@@ -35,7 +35,7 @@
         "file": "app/logic/scoring.py",
         "what_it_breaks": "Candidates are ranked worst first.",
         "caught": true,
-        "duration_s": 3.0
+        "duration_s": 3.2
       },
       {
         "id": "scoring-scale",
@@ -49,14 +49,14 @@
         "file": "app/logic/tasks.py",
         "what_it_breaks": "A missing scorecard becomes a task after 24 hours instead of 48.",
         "caught": true,
-        "duration_s": 3.3
+        "duration_s": 3.4
       },
       {
         "id": "task-reply-2bd",
         "file": "app/logic/tasks.py",
         "what_it_breaks": "An unanswered email becomes a task after 3 business days instead of 2.",
         "caught": true,
-        "duration_s": 3.3
+        "duration_s": 3.4
       },
       {
         "id": "task-stage-7d",
@@ -91,7 +91,7 @@
         "file": "app/agent/verify.py",
         "what_it_breaks": "The verifier passes answers that cite record IDs no tool returned.",
         "caught": true,
-        "duration_s": 1.2
+        "duration_s": 1.1
       },
       {
         "id": "verify-ranking",
@@ -105,7 +105,7 @@
         "file": "app/agent/verify.py",
         "what_it_breaks": "The verifier passes answers that show an email address or phone number.",
         "caught": true,
-        "duration_s": 3.3
+        "duration_s": 3.5
       }
     ]
   }

@@ -16,6 +16,8 @@ Usage (from backend/):
     uv run python evals/run.py --from-runs evals_out/<stamp>/runs.jsonl    regrade and report without API calls
     uv run python evals/run.py --resume evals_out/<stamp>/runs.jsonl       run only the runs that are missing or failed
                                                                             with an API error
+    uv run python evals/run.py --resume evals_out/<stamp>/runs.jsonl --judge claude-sonnet-5-5 --judge-missing
+                                                            judge kept runs that have no judge scores, without rerunning them
     uv run python evals/run.py --record --models claude-sonnet-5-5 --efforts medium
                                                             record the suggested questions into data/recordings.json
     uv run python evals/run.py --group multi_tool --models claude-haiku-5-5 --efforts low --repeats 1
@@ -233,11 +235,25 @@ def regrade(path: Path, data: dict[str, Any]) -> list[dict[str, Any]]:
     return [r for r in runs if r["question_id"] in by_id]
 
 
-async def rejudge(runs: list[dict[str, Any]], data: dict[str, Any], judge_model: str) -> None:
-    """Replace the judge scores on runs that were judged before, for example after a rubric change."""
+def judge_targets(runs: list[dict[str, Any]], missing_only: bool, judge_repeats: int) -> list[dict[str, Any]]:
+    """The kept runs to send to the judge.
+
+    By default these are the runs judged before, so a rubric change rescores the same set.
+    With missing_only, they are the runs in the first judge_repeats repeats that have an
+    answer but no judge scores yet, for example a setting that was rerun without --judge.
+    """
+    answered = [r for r in runs if r["result"].get("answer")]
+    if missing_only:
+        return [r for r in answered if r["repeat"] < judge_repeats and not (r.get("judge") or {}).get("scores")]
+    return [r for r in answered if r.get("judge")]
+
+
+async def rejudge(runs: list[dict[str, Any]], data: dict[str, Any], judge_model: str,
+                  missing_only: bool = False, judge_repeats: int = 1) -> None:
+    """Judge kept runs again (after a rubric change) or, with missing_only, judge the ones never judged."""
     client = loop.make_client(judge_model, "eval")
     by_id = {q["id"]: q for q in data["questions"]}
-    targets = [r for r in runs if r.get("judge") and r["result"].get("answer")]
+    targets = judge_targets(runs, missing_only, judge_repeats)
     gate = asyncio.Semaphore(CONCURRENCY)
 
     async def one(r: dict[str, Any]) -> None:
@@ -305,6 +321,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--from-runs", type=Path, help="Regrade a runs.jsonl file and write the reports.")
     parser.add_argument("--resume", type=Path, help="Continue a runs.jsonl file, running only the missing runs.")
     parser.add_argument("--rejudge", action="store_true", help="With --resume, judge the kept runs again.")
+    parser.add_argument("--judge-missing", action="store_true",
+                        help="With --resume and --judge, judge only kept runs that have no judge scores yet.")
     parser.add_argument("--record", action="store_true", help="Record the suggested questions instead.")
     args = parser.parse_args(argv)
 
@@ -332,8 +350,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.resume:
         out_file = args.resume.resolve()
         done = [r for r in regrade(out_file, data) if r["result"].get("status") != "error"]
-        if args.rejudge and args.judge:
-            asyncio.run(rejudge(done, data, args.judge))
+        if (args.rejudge or args.judge_missing) and args.judge:
+            asyncio.run(rejudge(done, data, args.judge, args.judge_missing, args.judge_repeats))
         out_file.write_text("".join(json.dumps(r, default=str) + "\n" for r in done))
     else:
         out = OUT_DIR / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
